@@ -1,0 +1,25 @@
+{
+  "name": "invoice-reconciliation-infra",
+  "private": true,
+  "version": "1.0.0",
+  "description": "AWS CDK stack: S3 + CloudFront frontend, Lambda Function URL backend",
+  "scripts": {
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy --all --require-approval broadening",
+    "destroy": "cdk destroy --all",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.270.0",
+    "constructs": "^10.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "aws-cdk": "^2.1143.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  },
+  "type": "module"
+}

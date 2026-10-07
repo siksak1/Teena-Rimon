@@ -22,7 +22,7 @@ export function FileDropZone({ label, hint, file, onFile, accent }: Props) {
     (accepted: File[], rejected: FileRejection[]) => {
       setRejectMessage(null);
       if (rejected.length > 0) {
-        setRejectMessage("PDF files only (max 15 MB).");
+        setRejectMessage("ניתן להעלות קובץ PDF בלבד (עד 15MB).");
         return;
       }
       if (accepted[0]) onFile(accepted[0]);
@@ -73,8 +73,8 @@ export function FileDropZone({ label, hint, file, onFile, accent }: Props) {
             <span className="dropzone__plus" aria-hidden>
               +
             </span>
-            <strong>Drop PDF here</strong>
-            <span>or click to browse</span>
+            <strong>גררו לכאן קובץ PDF</strong>
+            <span>או לחצו לבחירת קובץ</span>
           </div>
         )}
       </div>
@@ -88,7 +88,7 @@ export function FileDropZone({ label, hint, file, onFile, accent }: Props) {
             onFile(null);
           }}
         >
-          Remove
+          הסרה
         </button>
       )}
 

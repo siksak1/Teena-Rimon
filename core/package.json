@@ -1,0 +1,19 @@
+{
+  "name": "ledgermatch-core",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Shared PDF parsing and reconciliation engine (runs in Node and the browser)",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "unpdf": "^1.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.11"
+  }
+}

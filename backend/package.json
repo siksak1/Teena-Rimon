@@ -1,21 +1,27 @@
 {
   "name": "invoice-reconciliation-backend",
   "version": "1.0.0",
-  "description": "Minimal Lambda-ready API for AI invoice extraction",
-  "main": "dist/index.js",
+  "description": "Lambda-ready API that parses invoice PDFs with the shared core package",
+  "main": "dist/backend/src/server.js",
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch src/index.ts",
+    "dev": "NODE_ENV=development tsx watch src/server.ts",
     "build": "tsc",
-    "start": "NODE_ENV=production node dist/index.js",
+    "start": "NODE_ENV=production node dist/backend/src/server.js",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["invoice", "reconciliation", "lambda"],
+  "keywords": [
+    "invoice",
+    "reconciliation",
+    "lambda"
+  ],
   "license": "MIT",
   "dependencies": {
+    "@codegenie/serverless-express": "^5.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "unpdf": "^1.8.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

@@ -1,0 +1,16 @@
+{
+  "app": "npx tsx bin/app.ts",
+  "watch": {
+    "include": [
+      "bin/**",
+      "lib/**"
+    ]
+  },
+  "context": {
+    "region": "eu-central-1",
+    "enableWaf": false,
+    "domainName": "",
+    "certificateArn": "",
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+  }
+}

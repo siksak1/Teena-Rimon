@@ -1,66 +1,57 @@
 # LedgerMatch — Invoice Reconciliation
 
-Frontend-heavy invoice reconciliation: a minimal TypeScript API extracts structured line items from two PDFs (mock in development), and the React app owns all name normalization, matching, and discrepancy math.
+Reconciles a supplier's consolidated invoice against Teena-Rimon's AGROLINE draft ("חשבונית טיוטה"). Both PDFs are parsed deterministically (no AI), every supplier row is matched to the Teena-Rimon rows that describe the same delivery, and the gaps are shown by reason in a Hebrew, right-to-left UI.
 
 ## Architecture
 
 ```
-/frontend   React + Vite + TypeScript   ← comparison brain + UI
-/backend    Express + TypeScript        ← Lambda-ready /api/extract bridge
+/core       Pure TypeScript — PDF parsers + reconciliation engine (runs in Node and the browser)
+/backend    Express + TypeScript   ← Lambda-ready /api/extract (parses PDFs with core)
+/frontend   React + Vite           ← UI; runs the reconciliation with core
+/infra      AWS CDK                ← S3 + CloudFront + Lambda deployment
+/sample_data                      ← real sample invoices (Granot, Shivuk HaHof) used by the tests
 ```
 
-| Layer | Responsibility |
-| --- | --- |
-| **Backend** | Accept two PDFs → call AI structured output (or mock) → return raw JSON |
-| **Frontend** | Mapping dictionary, normalize names, match rows, compute qty/price/total diffs, render dashboard |
+### Where the PDFs are parsed
+
+The same parser code (`core/src/extract.ts`) can run in either place:
+
+| Mode | How | Notes |
+| --- | --- | --- |
+| `server` (default) | Browser uploads to `POST /api/extract` | Small frontend bundle |
+| `client` | Parsed in the browser tab | PDFs never leave the browser; pdf.js (~1.6 MB) is loaded on demand |
+
+Choose the default at build time with `VITE_PARSE_MODE=server|client`, or per visit with `?parse=client` / `?parse=server`.
 
 ## Quick start
 
 ```bash
-# Terminal 1 — API (mock mode when NODE_ENV=development)
-cd backend
-npm install
-npm run dev
-# → http://127.0.0.1:43124
-
-# Terminal 2 — UI (proxies /api → backend)
-cd frontend
-npm install
-npm run dev
-# → http://127.0.0.1:43123
+npm run install:all
+npm run dev          # API on :43124, UI on :43123 (proxies /api)
+npm test             # core tests (parsers on the sample PDFs + engine)
 ```
 
-Open [http://127.0.0.1:43123](http://127.0.0.1:43123). Drop any two PDF files (content ignored in mock mode) and click **Compare invoices**.
+## Supported formats
 
-## Mock mode
+- **Teena-Rimon** — AGROLINE draft, same layout for every supplier (`core/src/parsers/teenaRimon.ts`).
+- **Granot** — `core/src/parsers/granot.ts`
+- **Shivuk HaHof** — `core/src/parsers/shivukHahof.ts`
 
-When `NODE_ENV === "development"`, `POST /api/extract` **never** calls Gemini/OpenAI. It returns hardcoded Hebrew produce line items that exercise:
+The supplier is detected from the PDF (VAT number / company name). To add a supplier, write a `SupplierParser` (see `core/src/parsers/types.ts`) and register it in `core/src/parsers/registry.ts`. Each parser checks that its lines add up to the total printed on the PDF and warns otherwise.
 
-- Exact matches
-- Price mismatch (yellow)
-- Quantity / weight mismatch (yellow)
-- Combined mismatch (red)
-- Name aliasing via the dictionary (`"ונוס (אדום)"` → `"פיטאיה"`)
-- Our-only / supplier-only rows
+## Matching rules (`core/src/reconcile/`)
 
-## Frontend comparison flow
+1. **Document pairing** — Teena-Rimon's reference equals the supplier's booklet number or the digits of its `SH…` document number. Documents whose references differ are still paired when date (±2 days) and content agree; the gap is flagged "אסמכתא".
+2. **Groups inside a document** — 1:1, 1:k or k:1 (k ≤ 4), never across product families. Multi-row groups must add up to the same weight. A pair is rejected only when both weight and price differ by more than 5%. The chosen groups cover as many rows as possible, then maximise a score (name, weight, price, packages, date).
+3. **Leftovers** — remaining rows are tried across documents; whatever is left is listed as "רק אצל הספק" / "רק אצל תאנה ורימון".
+4. **Money** — compared net: the supplier's printed line total (per-line discount, which may be 0%) vs Teena-Rimon's amount minus its commercial discount. Pallet charges and VAT are not compared.
+5. **Offsetting** — when the net item totals are equal, price/weight gaps cancel out and are shown in a separate section.
 
-1. `extractInvoices(ourFile, supplierFile)` → raw `ExtractionResult`
-2. `compareInvoices(extraction)` in `frontend/src/lib/compare.ts`
-   - `normalizeProductName()` via `frontend/src/lib/normalize.ts`
-   - Match on canonical name
-   - Diff quantity, unit price, line total
-3. `DiscrepancyDashboard` renders severity-sorted rows
+Product names are matched by `NameMatcher` (`core/src/reconcile/names/`): names are parsed into family / colour / cultivar / size / grade using `dictionary.ts`. Unknown words on matched rows are listed in the UI as dictionary suggestions.
 
-Extend aliases in `PRODUCT_NAME_MAP` inside `frontend/src/lib/normalize.ts`.
+## Deploying to AWS
 
-## Production AI hook
-
-Set `GEMINI_API_KEY` or `OPENAI_API_KEY` and implement the call in `backend/src/extract.ts` using `invoiceExtractionSchema` from `backend/src/schema.ts`. Keep `NODE_ENV` out of `development` so the mock path is skipped.
-
-## Lambda note
-
-`backend/src/index.ts` exports `app`. Wrap with `@vendia/serverless-express` (or similar) for AWS Lambda; no comparison logic lives in the function.
+See [DEPLOY.md](DEPLOY.md). In short: `npm run install:all`, then `npm run deploy`.
 
 ## Ports
 
