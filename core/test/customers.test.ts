@@ -1,14 +1,10 @@
-import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseCustomerConfig } from "../src/customer.js";
 import { extractInvoices } from "../src/extract.js";
 import { OWN_DOCUMENT_PARSERS, supplierParsersFor } from "../src/parsers/registry.js";
-import { PAIRS, readSample, TEENA_RIMON } from "./helpers.js";
+import { customerSlugs, loadCustomer, PAIRS, readSample, TEENA_RIMON } from "./helpers.js";
 
-const CUSTOMERS = new URL("../../customers/", import.meta.url);
-const slugs = readdirSync(CUSTOMERS, { withFileTypes: true })
-  .filter((d) => d.isDirectory())
-  .map((d) => d.name);
+const slugs = customerSlugs();
 
 describe("customer configs", () => {
   it("finds at least one customer", () => {
@@ -17,8 +13,7 @@ describe("customer configs", () => {
 
   for (const slug of slugs) {
     it(`${slug}: is valid and only references formats that exist`, () => {
-      const file = `customers/${slug}/config.json`;
-      const config = parseCustomerConfig(JSON.parse(readFileSync(new URL(`${slug}/config.json`, CUSTOMERS), "utf8")), file);
+      const config = loadCustomer(slug);
       expect(config.slug).toBe(slug);
       expect(Object.keys(OWN_DOCUMENT_PARSERS)).toContain(config.ownDocument.format);
       expect(() => supplierParsersFor(config)).not.toThrow();

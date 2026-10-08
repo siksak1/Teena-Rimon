@@ -36,6 +36,19 @@ npm run dev          # UI on :43123
 npm test             # core tests (parsers on the sample PDFs, engine, customer configs)
 ```
 
+## Regression fixtures
+
+Every sample pair a customer has is listed in `customers/<slug>/fixtures/cases.json` (paths into `sample_data/`). `core/test/fixtures.test.ts` reconciles each one under that customer's config and compares the result with `customers/<slug>/fixtures/<case>.expected.json`: what was read, every group with its gaps and notes, the unmatched rows, totals and offsetting. A change to any parser or matching rule that alters what a user would see, for any supplier of any customer, fails this test.
+
+When a change is intended:
+
+```bash
+npm run fixtures:update   # rewrite the .expected.json files
+git diff customers/       # review every changed result before committing
+```
+
+To add a case: put the two PDFs in `sample_data/`, add an entry to `cases.json`, run `npm run fixtures:update`, and check the new `.expected.json` against a manual reconciliation. A case may also expect an error (e.g. a scanned invoice).
+
 ## Supported formats
 
 - **Own document: AGROLINE draft** (`agroline-draft`, Teena-Rimon) — same layout for every supplier (`core/src/parsers/agrolineDraft.ts`). Own-document formats are registered in `OWN_DOCUMENT_PARSERS` and chosen by `ownDocument.format` in the customer config.

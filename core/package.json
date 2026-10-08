@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "fixtures:update": "UPDATE_FIXTURES=1 vitest run test/fixtures.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

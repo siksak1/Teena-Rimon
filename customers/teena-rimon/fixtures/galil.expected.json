@@ -1,0 +1,731 @@
+{
+  "supplier": {
+    "parser": "galil",
+    "invoiceNumber": "SI266007639",
+    "lines": 80,
+    "printedItemsTotal": 131734.15,
+    "warnings": []
+  },
+  "own": {
+    "documentNumber": "10047",
+    "againstInvoice": "266007639",
+    "lines": 51,
+    "commercialDiscount": 0,
+    "discountPct": 0,
+    "warnings": [
+      "לא נמצאה \"הנחה מסחרית\" בחשבונית תאנה ורימון — ההשוואה מניחה 0%"
+    ]
+  },
+  "totals": {
+    "supplierNet": 131734.15,
+    "ownGross": 153224.5,
+    "ownDiscountPct": 0,
+    "ownNet": 153224.5,
+    "diff": 21490.35
+  },
+  "groups": [
+    {
+      "rows": "S24+S26+S25→T20",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 1700.81,
+      "quantityDiff": 2,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 700, תאנה ורימון 702 (+2)",
+        "מחיר: ספק 8, תאנה ורימון 10.4"
+      ]
+    },
+    {
+      "rows": "S74→T45",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 1652,
+      "quantityDiff": -1.5,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 830.5, תאנה ורימון 829 (-1.5)",
+        "מחיר: ספק 4, תאנה ורימון 6"
+      ]
+    },
+    {
+      "rows": "S35→T17",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 1530.7,
+      "quantityDiff": 1,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 544, תאנה ורימון 545 (+1)",
+        "מחיר: ספק 4.7, תאנה ורימון 7.5"
+      ]
+    },
+    {
+      "rows": "S49→T28",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 1390,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 4.7, תאנה ורימון 7.2"
+      ]
+    },
+    {
+      "rows": "S72→T43",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 1106,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 5, תאנה ורימון 7"
+      ]
+    },
+    {
+      "rows": "S56→T33",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 1068,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 5, תאנה ורימון 7"
+      ]
+    },
+    {
+      "rows": "S38→T22",
+      "flags": [
+        "price",
+        "doc_ref"
+      ],
+      "netDiff": 1052,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "מחיר: ספק 12, תאנה ורימון 14",
+        "אסמכתא שונה: ספק SH2632699, תאנה ורימון 26393"
+      ]
+    },
+    {
+      "rows": "S7+S10+S8+S9+S11+S12+S13→T6",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 998.42,
+      "quantityDiff": 0.02,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 831.98, תאנה ורימון 832 (+0.02)",
+        "מחיר: ספק 2.8, תאנה ורימון 4"
+      ]
+    },
+    {
+      "rows": "S18→T11",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 988.2,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "מחיר: ספק 4.7, תאנה ורימון 6.5"
+      ]
+    },
+    {
+      "rows": "S17→T10",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 970.2,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "מחיר: ספק 4.7, תאנה ורימון 6.5"
+      ]
+    },
+    {
+      "rows": "S68→T40",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 954,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 5, תאנה ורימון 6.8"
+      ]
+    },
+    {
+      "rows": "S79→T49",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 920.4,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 1.7, תאנה ורימון 3"
+      ]
+    },
+    {
+      "rows": "S80→T50",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 902.2,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 1.7, תאנה ורימון 3"
+      ]
+    },
+    {
+      "rows": "S77→T51",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 894.6,
+      "quantityDiff": 7,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 672, תאנה ורימון 679 (+7)",
+        "מחיר: ספק 1.7, תאנה ורימון 3"
+      ]
+    },
+    {
+      "rows": "S78→T48",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 887.9,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 1.7, תאנה ורימון 3"
+      ]
+    },
+    {
+      "rows": "S69→T41",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 881.4,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 1.7, תאנה ורימון 3"
+      ]
+    },
+    {
+      "rows": "S73→T44",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 867.1,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 1.7, תאנה ורימון 3"
+      ]
+    },
+    {
+      "rows": "S27+S28+S29+S30+S31→T21",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 812,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 4.5, תאנה ורימון 5.5"
+      ]
+    },
+    {
+      "rows": "S39+S41→T25",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 771.76,
+      "quantityDiff": 120.58,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 522.42, תאנה ורימון 643 (+120.58)",
+        "מחיר: ספק 8, תאנה ורימון 7.7"
+      ]
+    },
+    {
+      "rows": "S57→T34",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 715,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 1.7, תאנה ורימון 2.8"
+      ]
+    },
+    {
+      "rows": "S36→T18",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 682,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 1.5, תאנה ורימון 2.5"
+      ]
+    },
+    {
+      "rows": "S76→T46",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 634.8,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 5.3, תאנה ורימון 6.5"
+      ]
+    },
+    {
+      "rows": "S40+S42→T26",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": -604.64,
+      "quantityDiff": 59.42,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 300.58, תאנה ורימון 360 (+59.42)",
+        "מחיר: ספק 8/12, תאנה ורימון 7"
+      ]
+    },
+    {
+      "rows": "S14→T7",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 536.8,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 7, תאנה ורימון 7.8"
+      ]
+    },
+    {
+      "rows": "S53→T31",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 510,
+      "quantityDiff": 230,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 220, תאנה ורימון 450 (+230)",
+        "מחיר: ספק 12, תאנה ורימון 7"
+      ]
+    },
+    {
+      "rows": "S59+S60+S61+S62→T36",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 490.81,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 4.4, תאנה ורימון 5"
+      ]
+    },
+    {
+      "rows": "S3→T1",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 489.3,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 2.3, תאנה ורימון 3"
+      ]
+    },
+    {
+      "rows": "S19→T12",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 466.2,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "מחיר: ספק 1.5, תאנה ורימון 2.2"
+      ]
+    },
+    {
+      "rows": "S58→T37",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 430,
+      "quantityDiff": 260,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 280, תאנה ורימון 540 (+260)",
+        "מחיר: ספק 11, תאנה ורימון 6.5"
+      ]
+    },
+    {
+      "rows": "S23→T14",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 425,
+      "quantityDiff": 5,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "משקל: ספק 820, תאנה ורימון 825 (+5)",
+        "מחיר: ספק 2.5, תאנה ורימון 3"
+      ]
+    },
+    {
+      "rows": "S54→T39",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 413.4,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "מחיר: ספק 3.5, תאנה ורימון 4.1"
+      ]
+    },
+    {
+      "rows": "S43+S45+S44+S46+S47→T24",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 408.49,
+      "quantityDiff": 0.01,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 816.99, תאנה ורימון 817 (+0.01)",
+        "מחיר: ספק 3, תאנה ורימון 3.5"
+      ]
+    },
+    {
+      "rows": "S20→T16",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 380,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "מחיר: ספק 3.5, תאנה ורימון 4"
+      ]
+    },
+    {
+      "rows": "S15→T8",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 370.5,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 3, תאנה ורימון 3.5"
+      ]
+    },
+    {
+      "rows": "S55→T35",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 304,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 7.2, תאנה ורימון 8.2"
+      ]
+    },
+    {
+      "rows": "S5→T5",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 268.8,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 2.4, תאנה ורימון 2.8"
+      ]
+    },
+    {
+      "rows": "S6→T4",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 265.6,
+      "quantityDiff": 2,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 650, תאנה ורימון 652 (+2)",
+        "מחיר: ספק 2.4, תאנה ורימון 2.8"
+      ]
+    },
+    {
+      "rows": "S50→T29",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 260,
+      "quantityDiff": 5,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 820, תאנה ורימון 825 (+5)",
+        "מחיר: ספק 2.5, תאנה ורימון 2.8"
+      ]
+    },
+    {
+      "rows": "S63+S67+S66+S64+S65→T38",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 233.1,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 2.4, תאנה ורימון 2.7"
+      ]
+    },
+    {
+      "rows": "S4→T2",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 228.3,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 3.7, תאנה ורימון 4"
+      ]
+    },
+    {
+      "rows": "S37→T23",
+      "flags": [
+        "quantity",
+        "price",
+        "doc_ref"
+      ],
+      "netDiff": -211.5,
+      "quantityDiff": 4,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 459, תאנה ורימון 463 (+4)",
+        "מחיר: ספק 5, תאנה ורימון 4.5",
+        "אסמכתא שונה: ספק SH2632699, תאנה ורימון 26393"
+      ]
+    },
+    {
+      "rows": "S34→T19",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 158,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 7.5, תאנה ורימון 8"
+      ]
+    },
+    {
+      "rows": "S22→T13",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": -123.2,
+      "quantityDiff": 6,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "משקל: ספק 670, תאנה ורימון 676 (+6)",
+        "מחיר: ספק 2, תאנה ורימון 1.8"
+      ]
+    },
+    {
+      "rows": "S16→T9",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 93,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "מחיר: ספק 7.5, תאנה ורימון 7.8"
+      ]
+    },
+    {
+      "rows": "S48→T27",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 65.8,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 7.5, תאנה ורימון 7.7"
+      ]
+    },
+    {
+      "rows": "S21→T15",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 62.7,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "מחיר: ספק 2.4, תאנה ורימון 2.5"
+      ]
+    },
+    {
+      "rows": "S51→T32",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": 16,
+      "quantityDiff": 4,
+      "packagesDiff": null,
+      "dateDelta": 2,
+      "notes": [
+        "משקל: ספק 622, תאנה ורימון 626 (+4)"
+      ]
+    },
+    {
+      "rows": "S1+S2→T3",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S52→T30",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S70→T42",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S75→T47",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": []
+    }
+  ],
+  "supplierOnly": [
+    "S32",
+    "S33",
+    "S71"
+  ],
+  "ownOnly": [],
+  "offset": {
+    "applies": false,
+    "groups": []
+  },
+  "dictionarySuggestions": [
+    "rte",
+    "א",
+    "ברשת",
+    "זוגות",
+    "טריפולי",
+    "כארמן",
+    "עמק",
+    "רשת",
+    "שלישיו",
+    "שלישיות"
+  ]
+}

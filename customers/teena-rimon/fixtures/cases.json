@@ -1,0 +1,38 @@
+{
+  "granot": {
+    "own": "sample_data/גרנות אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/גרנות 17.09.pdf"
+  },
+  "shivuk": {
+    "own": "sample_data/שיווק החוף אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/שיווק החוף.pdf"
+  },
+  "dhai": {
+    "own": "sample_data/ד. חי אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/ד. חי תוצרת חקלאית.pdf"
+  },
+  "menashri": {
+    "own": "sample_data/אחים מנשרי אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/אחים מנשרי.pdf"
+  },
+  "haklaim": {
+    "own": "sample_data/החקלאים אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/החקלאים.pdf"
+  },
+  "galil": {
+    "own": "sample_data/גליל שוק מקומי אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/גליל שוק מקומי.pdf"
+  },
+  "hasor": {
+    "own": "sample_data/שיווק העשור אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/שיווק העשור.pdf"
+  },
+  "carmel": {
+    "own": "sample_data/בננות כרמל אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/בננות כרמל.pdf"
+  },
+  "harKor": {
+    "own": "sample_data/הר הקור אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/הר-קור.pdf"
+  }
+}

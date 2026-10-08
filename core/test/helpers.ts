@@ -1,43 +1,53 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { parseCustomerConfig } from "../src/customer.js";
+import { type CustomerConfig, parseCustomerConfig } from "../src/customer.js";
 import { extractInvoices } from "../src/extract.js";
 import type { ExtractionResult } from "../src/model.js";
 
-const SAMPLES = fileURLToPath(new URL("../../sample_data/", import.meta.url));
+const REPO = new URL("../../", import.meta.url);
 
-/** The sample invoices are Teena-Rimon's, so the tests run under its config. */
-export const TEENA_RIMON = parseCustomerConfig(
-  JSON.parse(readFileSync(new URL("../../customers/teena-rimon/config.json", import.meta.url), "utf8")),
-  "customers/teena-rimon/config.json",
-);
+/** One sample pair: paths relative to the repo root. */
+export type FixtureCase = { own: string; supplier: string };
 
-export const PAIRS = {
-  granot: { own: "גרנות אצל תאנה ורימון.pdf", supplier: "גרנות 17.09.pdf" },
-  shivuk: { own: "שיווק החוף אצל תאנה ורימון.pdf", supplier: "שיווק החוף.pdf" },
-  dhai: { own: "ד. חי אצל תאנה ורימון.pdf", supplier: "ד. חי תוצרת חקלאית.pdf" },
-  menashri: { own: "אחים מנשרי אצל תאנה ורימון.pdf", supplier: "אחים מנשרי.pdf" },
-  haklaim: { own: "החקלאים אצל תאנה ורימון.pdf", supplier: "החקלאים.pdf" },
-  galil: { own: "גליל שוק מקומי אצל תאנה ורימון.pdf", supplier: "גליל שוק מקומי.pdf" },
-  hasor: { own: "שיווק העשור אצל תאנה ורימון.pdf", supplier: "שיווק העשור.pdf" },
-  carmel: { own: "בננות כרמל אצל תאנה ורימון.pdf", supplier: "בננות כרמל.pdf" },
-  harKor: { own: "הר הקור אצל תאנה ורימון.pdf", supplier: "הר-קור.pdf" },
-} as const;
+/** Every folder under `customers/`. */
+export function customerSlugs(): string[] {
+  return readdirSync(new URL("customers/", REPO), { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
+}
 
-export async function extractSample(pair: keyof typeof PAIRS): Promise<ExtractionResult> {
-  const { own, supplier } = PAIRS[pair];
+export function loadCustomer(slug: string): CustomerConfig {
+  const file = `customers/${slug}/config.json`;
+  return parseCustomerConfig(JSON.parse(readFileSync(new URL(file, REPO), "utf8")), file);
+}
+
+/** `customers/<slug>/fixtures/cases.json`, or null when the customer has no fixtures yet. */
+export function fixtureCases(slug: string): Record<string, FixtureCase> | null {
+  const file = new URL(`customers/${slug}/fixtures/cases.json`, REPO);
+  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
+}
+
+/** The sample invoices are Teena-Rimon's, so most tests run under its config. */
+export const TEENA_RIMON = loadCustomer("teena-rimon");
+export const PAIRS = fixtureCases("teena-rimon")!;
+
+export async function extractCase(pair: FixtureCase, config: CustomerConfig): Promise<ExtractionResult> {
   return extractInvoices(
     {
-      ownPdf: new Uint8Array(await readFile(SAMPLES + own)),
-      supplierPdf: new Uint8Array(await readFile(SAMPLES + supplier)),
-      ownFileName: own,
-      supplierFileName: supplier,
+      ownPdf: await readSample(pair.own),
+      supplierPdf: await readSample(pair.supplier),
+      ownFileName: pair.own,
+      supplierFileName: pair.supplier,
     },
-    TEENA_RIMON,
+    config,
   );
 }
 
-export async function readSample(name: string): Promise<Uint8Array> {
-  return new Uint8Array(await readFile(SAMPLES + name));
+export async function extractSample(pair: string): Promise<ExtractionResult> {
+  return extractCase(PAIRS[pair], TEENA_RIMON);
+}
+
+/** Read a file by its path relative to the repo root. */
+export async function readSample(path: string): Promise<Uint8Array> {
+  return new Uint8Array(await readFile(new URL(path, REPO)));
 }

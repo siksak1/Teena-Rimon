@@ -1,0 +1,313 @@
+{
+  "supplier": {
+    "parser": "shivuk-hahof",
+    "invoiceNumber": "2SI2601318",
+    "lines": 28,
+    "printedItemsTotal": 138544.89,
+    "warnings": []
+  },
+  "own": {
+    "documentNumber": "10039",
+    "againstInvoice": "2601318",
+    "lines": 37,
+    "commercialDiscount": 18781.46,
+    "discountPct": 0.12,
+    "warnings": []
+  },
+  "totals": {
+    "supplierNet": 138544.89,
+    "ownGross": 156512.1,
+    "ownDiscountPct": 0.12,
+    "ownNet": 137730.64,
+    "diff": -814.25
+  },
+  "groups": [
+    {
+      "rows": "S22→T23",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -814.25,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S5→T13",
+      "flags": [
+        "packages"
+      ],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": -120,
+      "dateDelta": 0,
+      "notes": [
+        "אריזות: ספק 200, תאנה ורימון 80"
+      ]
+    },
+    {
+      "rows": "S7→T3+T10+T11",
+      "flags": [
+        "doc_ref"
+      ],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "אסמכתא שונה: ספק 912 / 2SH2606173, תאנה ורימון 926"
+      ]
+    },
+    {
+      "rows": "S8→T8+T9",
+      "flags": [
+        "doc_ref"
+      ],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "אסמכתא שונה: ספק 912 / 2SH2606173, תאנה ורימון 926"
+      ]
+    },
+    {
+      "rows": "S9→T6",
+      "flags": [
+        "doc_ref"
+      ],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "אסמכתא שונה: ספק 912 / 2SH2606173, תאנה ורימון 926"
+      ]
+    },
+    {
+      "rows": "S10→T7",
+      "flags": [
+        "doc_ref"
+      ],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "אסמכתא שונה: ספק 912 / 2SH2606173, תאנה ורימון 926"
+      ]
+    },
+    {
+      "rows": "S11→T4+T5",
+      "flags": [
+        "doc_ref"
+      ],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "אסמכתא שונה: ספק 912 / 2SH2606173, תאנה ורימון 926"
+      ]
+    },
+    {
+      "rows": "S1→T1",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S2→T2",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S3→T14",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S4→T15",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S6→T12",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S12→T19+T20",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S13→T22",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S14→T21",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S15→T17",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S16→T18",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S17→T16",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S18→T27",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S19→T26",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S20→T25",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S21→T24",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S23→T28",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S24→T30+T31",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S25→T29",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S26→T32+T33",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S27→T34+T35",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S28→T36+T37",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    }
+  ],
+  "supplierOnly": [],
+  "ownOnly": [],
+  "offset": {
+    "applies": false,
+    "groups": []
+  },
+  "dictionarySuggestions": []
+}

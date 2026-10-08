@@ -1,0 +1,372 @@
+{
+  "supplier": {
+    "parser": "menashri",
+    "invoiceNumber": "70354",
+    "lines": 38,
+    "printedItemsTotal": 71458.8,
+    "warnings": []
+  },
+  "own": {
+    "documentNumber": "10048",
+    "againstInvoice": "20231",
+    "lines": 33,
+    "commercialDiscount": 9568.78,
+    "discountPct": 0.12,
+    "warnings": [
+      "חשבונית הטיוטה הופקה כנגד חשבונית 20231, אבל חשבונית הספק היא 70354"
+    ]
+  },
+  "totals": {
+    "supplierNet": 71458.87,
+    "ownGross": 79739.94,
+    "ownDiscountPct": 0.12,
+    "ownNet": 70171.16,
+    "diff": -1287.71
+  },
+  "groups": [
+    {
+      "rows": "S10+S13+S12+S15+S14+S11→T10",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": -1546.07,
+      "quantityDiff": -5,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 758, תאנה ורימון 753 (-5)",
+        "מחיר: ספק 5, תאנה ורימון 2.7"
+      ]
+    },
+    {
+      "rows": "S28→T22",
+      "flags": [
+        "quantity",
+        "price"
+      ],
+      "netDiff": 595.76,
+      "quantityDiff": -5,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 478, תאנה ורימון 473 (-5)",
+        "מחיר: ספק 6.5, תאנה ורימון 8"
+      ]
+    },
+    {
+      "rows": "S7→T7",
+      "flags": [
+        "price"
+      ],
+      "netDiff": -239.36,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 8, תאנה ורימון 6"
+      ]
+    },
+    {
+      "rows": "S31→T25+T26",
+      "flags": [
+        "quantity",
+        "packages"
+      ],
+      "netDiff": -127.6,
+      "quantityDiff": -29,
+      "packagesDiff": 6,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 1313, תאנה ורימון 1284 (-29)",
+        "אריזות: ספק 120, תאנה ורימון 126",
+        "שם: \"איקרם\" ↔ \"עגבניה אשכולות\" (לא זוהה כאותו מוצר; ההתאמה לפי מספרים)"
+      ]
+    },
+    {
+      "rows": "S6→T6",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 120.56,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 17, תאנה ורימון 18"
+      ]
+    },
+    {
+      "rows": "S16→T12+T11",
+      "flags": [
+        "packages",
+        "price",
+        "doc_ref"
+      ],
+      "netDiff": -118.27,
+      "quantityDiff": 0,
+      "packagesDiff": -7,
+      "dateDelta": 1,
+      "notes": [
+        "אריזות: ספק 112, תאנה ורימון 105",
+        "מחיר: ספק 1.2, תאנה ורימון 1.2/1",
+        "אסמכתא שונה: ספק 4593, תאנה ורימון 4598"
+      ]
+    },
+    {
+      "rows": "S9→T9",
+      "flags": [
+        "price"
+      ],
+      "netDiff": 61.6,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 10, תאנה ורימון 12"
+      ]
+    },
+    {
+      "rows": "S21→T18",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -47.52,
+      "quantityDiff": -9,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 327, תאנה ורימון 318 (-9)"
+      ]
+    },
+    {
+      "rows": "S22→T19",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": 13.2,
+      "quantityDiff": 5,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 110, תאנה ורימון 115 (+5)"
+      ]
+    },
+    {
+      "rows": "S24+S25+S26→T20",
+      "flags": [
+        "packages"
+      ],
+      "netDiff": -0.01,
+      "quantityDiff": 0,
+      "packagesDiff": 8,
+      "dateDelta": 1,
+      "notes": [
+        "אריזות: ספק 96, תאנה ורימון 104"
+      ]
+    },
+    {
+      "rows": "S1→T1",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S2→T2",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S3→T3",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S4→T4",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S5→T5",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S8→T8",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S17→T13",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S18→T14",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S19→T15",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S20→T16",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S23→T17",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S27→T21",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S29→T23",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "שם: \"עגבנייה אשכולות\" ↔ \"עגבניה אשכולות\" (לא זוהה כאותו מוצר; ההתאמה לפי מספרים)"
+      ]
+    },
+    {
+      "rows": "S30→T24",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": []
+    },
+    {
+      "rows": "S32→T27",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S33→T28",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S34→T31",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S35→T29",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S36→T30",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S37→T32",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S38→T33",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    }
+  ],
+  "supplierOnly": [],
+  "ownOnly": [],
+  "offset": {
+    "applies": false,
+    "groups": []
+  },
+  "dictionarySuggestions": [
+    "xxl",
+    "ב'",
+    "סוג",
+    "פרמיום"
+  ]
+}
