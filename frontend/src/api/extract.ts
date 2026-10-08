@@ -1,9 +1,14 @@
+import type { ExtractionError, ExtractionErrorCode } from "@core/errors.js";
 import type { ExtractionResult } from "@core/model.js";
 import customer from "@customer-config";
 
+/** An expected failure (unreadable PDF, unsupported supplier…): `message` is for the user. */
 export class ExtractError extends Error {
-  constructor(message: string) {
+  readonly code: ExtractionErrorCode;
+
+  constructor(message: string, code: ExtractionErrorCode) {
     super(message);
+    this.code = code;
     this.name = "ExtractError";
   }
 }
@@ -25,7 +30,10 @@ export async function extractInvoices(ownFile: File, supplierFile: File): Promis
       customer,
     );
   } catch (err) {
-    if (err instanceof Error && err.name === "ExtractionError") throw new ExtractError(err.message);
+    // Matched by name: the class lives in the lazily loaded chunk.
+    if (err instanceof Error && err.name === "ExtractionError") {
+      throw new ExtractError(err.message, (err as ExtractionError).code);
+    }
     throw err;
   }
 }

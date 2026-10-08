@@ -1,9 +1,11 @@
 import { useRef, useState, useTransition } from "react";
+import { completedEvent, failedEvent } from "@core/analytics.js";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
 import { supplierParsersFor } from "@core/parsers/registry.js";
 import { reconcile } from "@core/reconcile/reconcile.js";
 import customer from "@customer-config";
-import { extractInvoices } from "./api/extract";
+import { analyticsContext, track } from "./analytics";
+import { ExtractError, extractInvoices } from "./api/extract";
 import { FileDropZone } from "./components/FileDropZone";
 import { ReconciliationView } from "./components/results/ReconciliationView";
 import "./App.css";
@@ -38,15 +40,26 @@ export default function App() {
     setError(null);
 
     try {
+      const started = performance.now();
       const extraction = await extractInvoices(ownFile, supplierFile);
       // Parsing can't be cancelled; ignore results that arrive after a reset or a newer run.
       if (controller.signal.aborted) return;
+      const parsed = performance.now();
+      const reconciliation = reconcile(extraction, customer);
+      const lines = { supplier: extraction.supplier.lines.length, own: extraction.own.lines.length };
+      track(
+        completedEvent(analyticsContext, reconciliation, lines, {
+          parseMs: parsed - started,
+          reconcileMs: performance.now() - parsed,
+        }),
+      );
       startTransition(() => {
-        setResult({ extraction, reconciliation: reconcile(extraction, customer) });
+        setResult({ extraction, reconciliation });
         setPhase("ready");
       });
     } catch (err) {
       if (controller.signal.aborted) return;
+      track(failedEvent(analyticsContext, err instanceof ExtractError ? err.code : "INTERNAL"));
       const message = err instanceof Error ? err.message : "אירעה שגיאה בקריאת החשבוניות.";
       setError(message);
       setPhase("error");

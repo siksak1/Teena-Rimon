@@ -14,5 +14,6 @@
     "offsetToleranceNis": 1,
     "arithmeticTolerance": 0.05
   },
-  "offsetting": "invoice-wide"
+  "offsetting": "invoice-wide",
+  "analytics": { "sendDiscrepancyAmount": true }
 }

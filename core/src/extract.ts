@@ -29,34 +29,41 @@ export async function extractInvoices(
   const supplierParsers = supplierParsersFor(config);
   const [ownDoc, supplierDoc] = await Promise.all([
     loadPdf(input.ownPdf).catch(() => {
-      throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.ownFileName}" כ-PDF`);
+      throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.ownFileName}" כ-PDF`, "NOT_PDF");
     }),
     loadPdf(input.supplierPdf).catch(() => {
-      throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.supplierFileName}" כ-PDF`);
+      throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.supplierFileName}" כ-PDF`, "NOT_PDF");
     }),
   ]);
 
   if (!ownParser.detect(ownDoc)) {
-    throw new ExtractionError(
-      ownParser.detect(supplierDoc)
-        ? `נראה שהקבצים הוחלפו — חשבונית ${config.displayName} הועלתה במקום חשבונית הספק`
-        : `הקובץ "${input.ownFileName}" אינו ${config.ownDocument.label} של ${config.displayName}`,
-    );
+    throw ownParser.detect(supplierDoc)
+      ? new ExtractionError(
+          `נראה שהקבצים הוחלפו — חשבונית ${config.displayName} הועלתה במקום חשבונית הספק`,
+          "FILES_SWAPPED",
+        )
+      : new ExtractionError(
+          `הקובץ "${input.ownFileName}" אינו ${config.ownDocument.label} של ${config.displayName}`,
+          "OWN_DOC_NOT_RECOGNIZED",
+        );
   }
 
   const parser = detectSupplier(supplierDoc, supplierParsers);
   if (!parser) {
     const known = UNSUPPORTED_SUPPLIERS.find((u) => supplierDoc.text.includes(u.vatId));
-    if (known) throw new ExtractionError(`חשבונית ${known.name} אינה נתמכת: ${known.reason}`);
+    if (known) {
+      throw new ExtractionError(`חשבונית ${known.name} אינה נתמכת: ${known.reason}`, "UNSUPPORTED_SUPPLIER");
+    }
     const supported = supplierParsers.map((p) => p.displayName).join(", ");
     throw new ExtractionError(
       `הספק בקובץ "${input.supplierFileName}" אינו נתמך עדיין. ספקים נתמכים: ${supported}`,
+      "UNSUPPORTED_SUPPLIER",
     );
   }
 
   const supplier = parser.parse(supplierDoc);
   if (supplier.lines.length === 0) {
-    throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser.displayName}`);
+    throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser.displayName}`, "NO_LINES");
   }
   const own = ownParser.parse(ownDoc, config.displayName);
 

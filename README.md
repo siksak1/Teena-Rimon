@@ -36,6 +36,15 @@ npm run dev          # UI on :43123
 npm test             # core tests (parsers on the sample PDFs, engine, customer configs)
 ```
 
+## Usage analytics (counts only)
+
+After each comparison the app sends one event to PostHog Cloud EU (`frontend/src/analytics.ts`); the payload is built in `core/src/analytics.ts` and nothing else is ever sent:
+
+- `reconciliation_completed`: customer slug, app version, config version, browser family (e.g. `chrome-129`), line counts on both sides, matched groups, groups with gaps, unmatched rows on each side, offset applied, parser-warning count, parse and reconcile time in ms, and — only when the customer's config sets `analytics.sendDiscrepancyAmount` — the invoice's net gap rounded to ₪10.
+- `reconciliation_failed`: the same identifying fields plus a fixed `error_code` (`NOT_PDF`, `FILES_SWAPPED`, `OWN_DOC_NOT_RECOGNIZED`, `UNSUPPORTED_SUPPLIER`, `NO_LINES`, `INTERNAL`). Error messages are never sent: they contain file names.
+
+`distinct_id` is the customer slug and person profiles are off, so no individual user is identified. Requests carry no cookies and no `Referer` (the secret URL path never leaves the page). Sending is fire-and-forget, and the dev server only logs the payload to the console. `core/test/analytics.test.ts` pins the exact property list and checks, on every sample pair, that no supplier name, invoice or document number, product name or file name appears in the payload. In the PostHog project settings, keep "Discard client IP data" on.
+
 ## Regression fixtures
 
 Every sample pair a customer has is listed in `customers/<slug>/fixtures/cases.json` (paths into `sample_data/`). `core/test/fixtures.test.ts` reconciles each one under that customer's config and compares the result with `customers/<slug>/fixtures/<case>.expected.json`: what was read, every group with its gaps and notes, the unmatched rows, totals and offsetting. A change to any parser or matching rule that alters what a user would see, for any supplier of any customer, fails this test.

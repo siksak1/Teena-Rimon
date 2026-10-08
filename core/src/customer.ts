@@ -68,6 +68,11 @@ export const customerConfigSchema = z.strictObject({
   offsetting: z.enum(["invoice-wide", "off"]),
   /** Added to the shared product dictionary (merged, not replaced). */
   dictionary: dictionaryExtension.optional(),
+  /** Usage analytics (counts only). Each customer's agreement says what is sent. */
+  analytics: z.strictObject({
+    /** Also send the invoice's net gap, rounded to ₪10. */
+    sendDiscrepancyAmount: z.boolean(),
+  }),
 });
 
 export type CustomerConfig = z.infer<typeof customerConfigSchema>;

@@ -91,7 +91,7 @@ function parseAgrolineDraft(doc: PdfDocument, customerName: string): OwnInvoice 
   }
 
   if (lines.length === 0) {
-    throw new ExtractionError(`לא נמצאו שורות בחשבונית הטיוטה של ${customerName}`);
+    throw new ExtractionError(`לא נמצאו שורות בחשבונית הטיוטה של ${customerName}`, "NO_LINES");
   }
 
   const gross = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
