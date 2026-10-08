@@ -34,7 +34,9 @@ async function handler(event) {
 
   let route;
   try {
-    route = JSON.parse(await kvs.get(match[1]));
+    // Two statements on purpose: CloudFront's runtime rejects `await` inside call arguments.
+    const value = await kvs.get(match[1]);
+    route = JSON.parse(value);
   } catch (e) {
     return notFound(); // no such token (or a malformed entry)
   }
