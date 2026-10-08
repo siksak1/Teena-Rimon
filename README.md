@@ -10,6 +10,7 @@ Reconciles a supplier's consolidated invoice against the wholesaler's own docume
 /frontend   React + Vite           ← UI; parses the PDFs and runs the reconciliation in the browser
 /infra      AWS CDK                ← static hosting (S3 + CloudFront + routing function), see DEPLOY.md
 /scripts    release.sh, token.sh   ← ship / roll back a customer's build; manage secret customer URLs
+/docs       it-verification-he.md, privacy-statement.md ← for customers' IT staff and the customer agreement
 /sample_data                      ← real sample invoices (one pair per supplier) used by the tests
 ```
 
@@ -93,9 +94,45 @@ Thresholds below are Teena-Rimon's; each customer sets them under `tolerances` i
 
 Product names are matched by `NameMatcher` (`core/src/reconcile/names/`): names are parsed into family / colour / cultivar / size / grade using `dictionary.ts`. A product missing from the dictionary falls back to the stem of its first word ("עגבניות" ≈ "עגבניה"), so new products need no dictionary entry; a group matched on numbers alone carries a "שם:" note. The dictionary is optional enrichment — unknown words on matched rows are listed in the UI as dictionary suggestions.
 
-## Deploying to AWS
+## Deployment (AWS)
 
-See [DEPLOY.md](DEPLOY.md).
+A static site with no server code. Details, prerequisites and post-deploy checks: [DEPLOY.md](DEPLOY.md).
+
+```
+Browser ──► CloudFront ──(viewer-request Function + KeyValueStore)──► private S3 bucket
+https://<host>/<token>/     token → {customer, build}                builds/<customer>/<build>/…
+```
+
+- **Stack `LedgerMatchStatic`** (eu-central-1, `infra/`) contains a private S3 bucket, a CloudFront distribution, a CloudFront Function with a KeyValueStore, and a response-headers policy. There is no Lambda, database or secret.
+- **One secret URL per customer:** `https://<host>/<customer>-<16 random chars>/`. Tokens live only in the KeyValueStore, never in git. Any other path, `/` and `/robots.txt` get a 404 from the function.
+- **Every response** carries a CSP allowing only the app's own files plus `https://eu.i.posthog.com`, `X-Robots-Tag: noindex, nofollow, noarchive` and `Referrer-Policy: no-referrer`. The headers are defined in `infra/security-headers.json`, which the end-to-end tests also use.
+- **Each build is immutable:** `builds/<customer>/<version>-<commit>/`. A release uploads a new build and repoints the customer's URLs. Rollback repoints them to an older build. Nothing is ever overwritten or invalidated.
+
+**Estimated monthly cost: about $0–1.**
+
+| Item | At current scale (1 customer, ~2,000 comparisons/month) |
+| --- | --- |
+| CloudFront: transfer, requests, Function invocations | $0 (always-free tier: 1 TB, 10M requests, 2M function invocations) |
+| S3 (≈5 MB per build) and the KeyValueStore | a few cents |
+| PostHog Cloud EU | $0 (free tier: 1M events; ~1 event per comparison) |
+
+A handful of customers stays within the free tiers. A custom domain later adds the domain fee only, because the ACM certificate is free.
+
+**Releasing a new version** (from your machine, logged in with `aws login`):
+
+```bash
+# 1. Commit your change (bump "version" in package.json for a new release; bump configVersion for config-only changes)
+git commit -am "…" && git push
+
+# 2. Test, build, upload, and point the customer's URLs at the new build
+scripts/release.sh teena-rimon            # add --preview to update only preview URLs first
+
+# 3. If something is wrong: roll back in seconds
+scripts/release.sh teena-rimon --list
+scripts/release.sh teena-rimon --point <previous build>
+```
+
+Customer URLs: `scripts/token.sh add | rotate | revoke | list`. Infrastructure changes (rare): `cd infra && npx cdk diff && npx cdk deploy`.
 
 ## Ports
 
