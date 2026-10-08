@@ -8,7 +8,8 @@ Reconciles a supplier's consolidated invoice against the wholesaler's own docume
 /core       Pure TypeScript — PDF parsers + reconciliation engine (runs in the browser and in Node for tests)
 /customers  <slug>/config.json     ← per-customer settings (see below)
 /frontend   React + Vite           ← UI; parses the PDFs and runs the reconciliation in the browser
-/infra      AWS CDK                ← static hosting (S3 + CloudFront)
+/infra      AWS CDK                ← static hosting (S3 + CloudFront + routing function), see DEPLOY.md
+/scripts    release.sh, token.sh   ← ship / roll back a customer's build; manage secret customer URLs
 /sample_data                      ← real sample invoices (one pair per supplier) used by the tests
 ```
 

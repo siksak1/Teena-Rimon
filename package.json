@@ -2,13 +2,13 @@
   "name": "invoice-reconciliation",
   "private": true,
   "version": "1.0.0",
-  "description": "Supplier vs Teena-Rimon invoice reconciliation: shared parsing/matching core and a browser-only React UI",
+  "description": "Supplier invoice reconciliation for produce wholesalers: shared parsing/matching core, browser-only React UI, static AWS hosting",
   "scripts": {
     "dev": "npm run dev --prefix frontend",
     "build": "npm run build --prefix frontend",
     "typecheck": "npm run typecheck --prefix core && CUSTOMER=teena-rimon npm run build --prefix frontend && npm run typecheck --prefix infra",
     "install:all": "npm install --prefix core && npm install --prefix frontend && npm install --prefix infra",
-    "test": "npm test --prefix core",
+    "test": "npm test --prefix core && npm test --prefix infra",
     "fixtures:update": "npm run fixtures:update --prefix core"
   }
 }

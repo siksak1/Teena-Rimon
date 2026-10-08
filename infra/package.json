@@ -2,12 +2,12 @@
   "name": "invoice-reconciliation-infra",
   "private": true,
   "version": "1.0.0",
-  "description": "AWS CDK stack: S3 + CloudFront frontend, Lambda Function URL backend",
+  "description": "AWS CDK stack: static hosting on S3 + CloudFront, routed by secret per-customer URL tokens",
   "scripts": {
     "synth": "cdk synth",
     "diff": "cdk diff",
-    "deploy": "cdk deploy --all --require-approval broadening",
-    "destroy": "cdk destroy --all",
+    "deploy": "cdk deploy --require-approval broadening",
+    "test": "node --test functions/route.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

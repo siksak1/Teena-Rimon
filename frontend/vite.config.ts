@@ -11,7 +11,8 @@ const { version } = JSON.parse(readFileSync(new URL("../package.json", import.me
 function gitCommit(): string {
   try {
     const sha = execSync("git rev-parse --short HEAD").toString().trim();
-    const dirty = execSync("git status --porcelain").toString().trim() !== "";
+    // Only the build's inputs count; untracked editor/tool files elsewhere don't.
+    const dirty = execSync("git status --porcelain -- core frontend customers package.json").toString().trim() !== "";
     return dirty ? `${sha}-dirty` : sha;
   } catch {
     return "unknown";
