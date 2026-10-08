@@ -113,7 +113,7 @@ https://<host>/<token>/     token → {customer, build}                builds/<c
 | Item | At current scale (1 customer, ~2,000 comparisons/month) |
 | --- | --- |
 | CloudFront: transfer, requests, Function invocations | $0 (always-free tier: 1 TB, 10M requests, 2M function invocations) |
-| S3 (≈5 MB per build) and the KeyValueStore | a few cents |
+| S3 (≈3 MB per build) and the KeyValueStore | a few cents |
 | PostHog Cloud EU | $0 (free tier: 1M events; ~1 event per comparison) |
 
 A handful of customers stays within the free tiers. A custom domain later adds the domain fee only, because the ACM certificate is free.
