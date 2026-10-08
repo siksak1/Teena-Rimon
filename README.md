@@ -14,7 +14,15 @@ Reconciles a supplier's consolidated invoice against the wholesaler's own docume
 
 ### Per-customer configuration
 
-The engine and parsers are shared; what differs between wholesalers lives in `customers/<slug>/config.json` (type `CustomerConfig` in `core/src/customer.ts`): display name, own-document format and label, which supplier fields the clerk records as the reference (`referenceRules`), matching tolerances, offsetting on/off, and additions to the product dictionary. The frontend bundles one customer's config through the `@customer-config` alias in `frontend/vite.config.ts`.
+The engine and parsers are shared; what differs between wholesalers lives in `customers/<slug>/config.json`, validated by the zod schema in `core/src/customer.ts`: display name, own-document format and label, which supplier parsers the customer gets (`suppliers`), which supplier fields the clerk records as the reference (`referenceRules`), matching tolerances, offsetting on/off, and additions to the product dictionary. Bump `configVersion` on every change; the footer shows it next to the app version.
+
+Each build is for one customer, and only that customer's config is bundled:
+
+```bash
+CUSTOMER=teena-rimon npm run build
+```
+
+The build fails if `CUSTOMER` is missing or the config is invalid. `npm run dev` defaults to `teena-rimon`. `core/test/customers.test.ts` checks every config under `customers/` and that every format and supplier it names exists.
 
 ### Invoice files never leave the browser
 
@@ -25,7 +33,7 @@ Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core
 ```bash
 npm run install:all
 npm run dev          # UI on :43123
-npm test             # core tests (parsers on the sample PDFs + engine)
+npm test             # core tests (parsers on the sample PDFs, engine, customer configs)
 ```
 
 ## Supported formats
@@ -40,7 +48,7 @@ npm test             # core tests (parsers on the sample PDFs + engine)
 - **Bananot Carmel (בננות כרמל)** — `core/src/parsers/carmel.ts`
 - **Not supported:** Har HaKor (הר-קור) sends scanned invoices with no usable text. It gets a specific error asking for a digital PDF (`UNSUPPORTED_SUPPLIERS` in `registry.ts`).
 
-The supplier is detected from the PDF (VAT number / company name). To add a supplier, write a `SupplierParser` (see `core/src/parsers/types.ts`) and register it in `core/src/parsers/registry.ts`. Each parser checks that its lines add up to the total printed on the PDF and warns otherwise.
+The supplier is detected from the PDF (VAT number / company name), among the parsers the customer's config enables. To add a supplier, write a `SupplierParser` (see `core/src/parsers/types.ts`), register it in `SUPPLIER_PARSERS` in `core/src/parsers/registry.ts`, and add its id to `suppliers` in the configs of the customers who need it. Each parser checks that its lines add up to the total printed on the PDF and warns otherwise.
 
 ## Matching rules (`core/src/reconcile/`)
 

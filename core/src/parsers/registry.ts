@@ -1,3 +1,4 @@
+import type { CustomerConfig } from "../customer.js";
 import type { PdfDocument } from "../pdf/layout.js";
 import { dHaiParser, menashriParser } from "./agroline.js";
 import { agrolineDraftParser } from "./agrolineDraft.js";
@@ -9,7 +10,10 @@ import { hasorParser } from "./hasor.js";
 import { shivukHahofParser } from "./shivukHahof.js";
 import type { OwnDocumentParser, SupplierParser } from "./types.js";
 
-/** Add a parser here to support a new supplier format. */
+/**
+ * Every supplier format the product supports. Add a parser here, then list
+ * its id under `suppliers` in the configs of the customers who need it.
+ */
 export const SUPPLIER_PARSERS: SupplierParser[] = [
   granotParser,
   shivukHahofParser,
@@ -41,6 +45,15 @@ export function ownDocumentParser(format: string): OwnDocumentParser {
   return parser;
 }
 
-export function detectSupplier(doc: PdfDocument): SupplierParser | null {
-  return SUPPLIER_PARSERS.find((p) => p.detect(doc)) ?? null;
+/** The supplier parsers a customer's config enables, in config order. */
+export function supplierParsersFor(config: CustomerConfig): SupplierParser[] {
+  return config.suppliers.map((id) => {
+    const parser = SUPPLIER_PARSERS.find((p) => p.id === id);
+    if (!parser) throw new Error(`Unknown supplier parser "${id}" in customer config "${config.slug}"`);
+    return parser;
+  });
+}
+
+export function detectSupplier(doc: PdfDocument, parsers: SupplierParser[]): SupplierParser | null {
+  return parsers.find((p) => p.detect(doc)) ?? null;
 }

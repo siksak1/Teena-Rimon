@@ -1,5 +1,6 @@
 import { useRef, useState, useTransition } from "react";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
+import { supplierParsersFor } from "@core/parsers/registry.js";
 import { reconcile } from "@core/reconcile/reconcile.js";
 import customer from "@customer-config";
 import { extractInvoices } from "./api/extract";
@@ -9,6 +10,8 @@ import "./App.css";
 import "./components/results/results.css";
 
 type UiPhase = "idle" | "extracting" | "ready" | "error";
+
+const supplierNames = supplierParsersFor(customer).map((p) => p.displayName).join(", ");
 
 export default function App() {
   const [ownFile, setOwnFile] = useState<File | null>(null);
@@ -82,7 +85,7 @@ export default function App() {
           </div>
         </div>
         <p className="brand-bar__note">
-          הקבצים נקראים בדפדפן בלבד · ספקים נתמכים: גרנות, שיווק החוף, ד. חי, אחים מנשרי, החקלאים, גליל שוק מקומי, שיווק העשור, בננות כרמל
+          הקבצים נקראים בדפדפן בלבד · ספקים נתמכים: {supplierNames}
         </p>
       </header>
 
@@ -140,7 +143,7 @@ export default function App() {
         <span>הצמדה דטרמיניסטית · ללא AI</span>
         <span>הקבצים לא יוצאים מהדפדפן</span>
         <span className="site-foot__version">
-          גרסה <bdi>{__APP_VERSION__} ({__APP_COMMIT__})</bdi>
+          גרסה <bdi>{__APP_VERSION__} ({__APP_COMMIT__})</bdi> · תצורה <bdi>{customer.configVersion}</bdi>
         </span>
       </footer>
     </div>

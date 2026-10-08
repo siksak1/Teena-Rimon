@@ -5,7 +5,7 @@ import { loadPdf } from "./pdf/layout.js";
 import {
   detectSupplier,
   ownDocumentParser,
-  SUPPLIER_PARSERS,
+  supplierParsersFor,
   UNSUPPORTED_SUPPLIERS,
 } from "./parsers/registry.js";
 
@@ -26,6 +26,7 @@ export async function extractInvoices(
   config: CustomerConfig,
 ): Promise<ExtractionResult> {
   const ownParser = ownDocumentParser(config.ownDocument.format);
+  const supplierParsers = supplierParsersFor(config);
   const [ownDoc, supplierDoc] = await Promise.all([
     loadPdf(input.ownPdf).catch(() => {
       throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.ownFileName}" כ-PDF`);
@@ -43,11 +44,11 @@ export async function extractInvoices(
     );
   }
 
-  const parser = detectSupplier(supplierDoc);
+  const parser = detectSupplier(supplierDoc, supplierParsers);
   if (!parser) {
     const known = UNSUPPORTED_SUPPLIERS.find((u) => supplierDoc.text.includes(u.vatId));
     if (known) throw new ExtractionError(`חשבונית ${known.name} אינה נתמכת: ${known.reason}`);
-    const supported = SUPPLIER_PARSERS.map((p) => p.displayName).join(", ");
+    const supported = supplierParsers.map((p) => p.displayName).join(", ");
     throw new ExtractionError(
       `הספק בקובץ "${input.supplierFileName}" אינו נתמך עדיין. ספקים נתמכים: ${supported}`,
     );

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npm run dev --prefix frontend",
     "build": "npm run build --prefix frontend",
-    "typecheck": "npm run typecheck --prefix core && npm run build --prefix frontend && npm run typecheck --prefix infra",
+    "typecheck": "npm run typecheck --prefix core && CUSTOMER=teena-rimon npm run build --prefix frontend && npm run typecheck --prefix infra",
     "install:all": "npm install --prefix core && npm install --prefix frontend && npm install --prefix infra",
     "test": "npm test --prefix core"
   }

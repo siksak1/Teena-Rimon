@@ -1,15 +1,16 @@
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import type { CustomerConfig } from "../src/customer.js";
+import { parseCustomerConfig } from "../src/customer.js";
 import { extractInvoices } from "../src/extract.js";
 import type { ExtractionResult } from "../src/model.js";
 
 const SAMPLES = fileURLToPath(new URL("../../sample_data/", import.meta.url));
 
 /** The sample invoices are Teena-Rimon's, so the tests run under its config. */
-export const TEENA_RIMON: CustomerConfig = JSON.parse(
-  readFileSync(new URL("../../customers/teena-rimon/config.json", import.meta.url), "utf8"),
+export const TEENA_RIMON = parseCustomerConfig(
+  JSON.parse(readFileSync(new URL("../../customers/teena-rimon/config.json", import.meta.url), "utf8")),
+  "customers/teena-rimon/config.json",
 );
 
 export const PAIRS = {
