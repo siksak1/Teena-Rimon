@@ -5,29 +5,21 @@ Reconciles a supplier's consolidated invoice against Teena-Rimon's AGROLINE draf
 ## Architecture
 
 ```
-/core       Pure TypeScript — PDF parsers + reconciliation engine (runs in Node and the browser)
-/backend    Express + TypeScript   ← Lambda-ready /api/extract (parses PDFs with core)
-/frontend   React + Vite           ← UI; runs the reconciliation with core
-/infra      AWS CDK                ← S3 + CloudFront + Lambda deployment
+/core       Pure TypeScript — PDF parsers + reconciliation engine (runs in the browser and in Node for tests)
+/frontend   React + Vite           ← UI; parses the PDFs and runs the reconciliation in the browser
+/infra      AWS CDK                ← static hosting (S3 + CloudFront)
 /sample_data                      ← real sample invoices (one pair per supplier) used by the tests
 ```
 
-### Where the PDFs are parsed
+### Invoice files never leave the browser
 
-The same parser code (`core/src/extract.ts`) can run in either place:
-
-| Mode | How | Notes |
-| --- | --- | --- |
-| `server` (default) | Browser uploads to `POST /api/extract` | Small frontend bundle |
-| `client` | Parsed in the browser tab | PDFs never leave the browser; pdf.js (~1.6 MB) is loaded on demand |
-
-Choose the default at build time with `VITE_PARSE_MODE=server|client`, or per visit with `?parse=client` / `?parse=server`.
+Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core/src/extract.ts`); there is no server-side code. pdf.js (~1.6 MB) is loaded on demand when the first comparison runs, and fonts are bundled (`@fontsource/*`), so the app makes no third-party requests.
 
 ## Quick start
 
 ```bash
 npm run install:all
-npm run dev          # API on :43124, UI on :43123 (proxies /api)
+npm run dev          # UI on :43123
 npm test             # core tests (parsers on the sample PDFs + engine)
 ```
 
@@ -58,11 +50,10 @@ Product names are matched by `NameMatcher` (`core/src/reconcile/names/`): names 
 
 ## Deploying to AWS
 
-See [DEPLOY.md](DEPLOY.md). In short: `npm run install:all`, then `npm run deploy`.
+See [DEPLOY.md](DEPLOY.md).
 
 ## Ports
 
 | Service | Port |
 | --- | --- |
 | Frontend (Vite) | `43123` |
-| Backend (Express) | `43124` |

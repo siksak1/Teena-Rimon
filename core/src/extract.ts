@@ -1,5 +1,5 @@
 import { ExtractionError } from "./errors.js";
-import type { ExtractionResult, ParseMode } from "./model.js";
+import type { ExtractionResult } from "./model.js";
 import { loadPdf } from "./pdf/layout.js";
 import { detectSupplier, SUPPLIER_PARSERS, UNSUPPORTED_SUPPLIERS } from "./parsers/registry.js";
 import { isTeenaRimonDraft, parseTeenaRimon } from "./parsers/teenaRimon.js";
@@ -9,12 +9,11 @@ export type ExtractInput = {
   supplierPdf: Uint8Array;
   trFileName: string;
   supplierFileName: string;
-  parseMode: ParseMode;
 };
 
 /**
- * Parse both PDFs deterministically. Runs unchanged in Node (the API) and in
- * the browser, so the deployment can choose where parsing happens.
+ * Parse both PDFs deterministically. Runs in the browser (the app) and in
+ * Node (the tests); invoice files are never sent anywhere.
  */
 export async function extractInvoices(input: ExtractInput): Promise<ExtractionResult> {
   const [trDoc, supplierDoc] = await Promise.all([
@@ -61,7 +60,6 @@ export async function extractInvoices(input: ExtractInput): Promise<ExtractionRe
     supplier,
     teenaRimon,
     meta: {
-      parseMode: input.parseMode,
       trFileName: input.trFileName,
       supplierFileName: input.supplierFileName,
     },

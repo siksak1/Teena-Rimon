@@ -24,7 +24,6 @@ export function ReconciliationView({ extraction, result }: Props) {
       <header className="results__header">
         <p className="eyebrow">
           תוצאות ההתאמה
-          <span className="badge">פענוח: {extraction.meta.parseMode === "client" ? "דפדפן" : "שרת"}</span>
         </p>
         <h2>
           {extraction.supplier.supplierName} · חשבונית {extraction.supplier.invoiceNumber}

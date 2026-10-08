@@ -24,7 +24,6 @@ export async function extractSample(pair: keyof typeof PAIRS): Promise<Extractio
     supplierPdf: new Uint8Array(await readFile(SAMPLES + supplier)),
     trFileName: tr,
     supplierFileName: supplier,
-    parseMode: "server",
   });
 }
 

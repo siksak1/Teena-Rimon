@@ -102,7 +102,6 @@ describe("D. Hai parser", () => {
       supplierPdf: await readSample(PAIRS.dhai.tr),
       trFileName: "a.pdf",
       supplierFileName: "b.pdf",
-      parseMode: "server",
     });
     await expect(promise).rejects.toThrow("הוחלפו");
   });
@@ -256,7 +255,6 @@ describe("slot validation", () => {
       supplierPdf: await readSample(PAIRS.granot.tr),
       trFileName: "a.pdf",
       supplierFileName: "b.pdf",
-      parseMode: "server",
     });
     await expect(promise).rejects.toBeInstanceOf(ExtractionError);
     await expect(promise).rejects.toThrow("הוחלפו");
@@ -268,7 +266,6 @@ describe("slot validation", () => {
       supplierPdf: await readSample(PAIRS.granot.supplier),
       trFileName: "a.pdf",
       supplierFileName: "b.pdf",
-      parseMode: "server",
     });
     expect(result.teenaRimon.warnings.join()).toContain("כנגד חשבונית");
   });

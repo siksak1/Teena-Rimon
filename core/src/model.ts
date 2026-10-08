@@ -1,5 +1,5 @@
 /**
- * Data model shared by the parsers (backend or browser) and the
+ * Data model shared by the parsers (in the browser) and the
  * reconciliation engine. Dates are ISO `YYYY-MM-DD`; money is in ILS.
  */
 
@@ -68,13 +68,10 @@ export type TrInvoice = {
   warnings: string[];
 };
 
-export type ParseMode = "server" | "client";
-
 export type ExtractionResult = {
   supplier: SupplierInvoice;
   teenaRimon: TrInvoice;
   meta: {
-    parseMode: ParseMode;
     trFileName: string;
     supplierFileName: string;
   };

@@ -81,7 +81,7 @@ describe("reconcile — offsetting", () => {
       lines: [sLine("S1", 100, 10), sLine("S2", 100, 5)] },
     teenaRimon: { draftNumber: "1", againstInvoice: null, printedGrossTotal: null, commercialDiscount: 0, discountPct: 0, warnings: [],
       lines: [tLine("T1", "מנגו", 100, 9), tLine("T2", "אבוקדו", 100, 6)] },
-    meta: { parseMode: "server", trFileName: "a", supplierFileName: "b" },
+    meta: { trFileName: "a", supplierFileName: "b" },
   };
 
   it("moves price gaps that cancel out to the offset section", () => {

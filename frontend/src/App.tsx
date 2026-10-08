@@ -1,15 +1,13 @@
 import { useRef, useState, useTransition } from "react";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
 import { reconcile } from "@core/reconcile/reconcile.js";
-import { extractInvoices, ExtractApiError, getParseMode } from "./api/extract";
+import { extractInvoices } from "./api/extract";
 import { FileDropZone } from "./components/FileDropZone";
 import { ReconciliationView } from "./components/results/ReconciliationView";
 import "./App.css";
 import "./components/results/results.css";
 
 type UiPhase = "idle" | "extracting" | "ready" | "error";
-
-const parseMode = getParseMode();
 
 export default function App() {
   const [trFile, setTrFile] = useState<File | null>(null);
@@ -36,17 +34,16 @@ export default function App() {
     setError(null);
 
     try {
-      const extraction = await extractInvoices(trFile, supplierFile, parseMode, controller.signal);
+      const extraction = await extractInvoices(trFile, supplierFile);
+      // Parsing can't be cancelled; ignore results that arrive after a reset or a newer run.
+      if (controller.signal.aborted) return;
       startTransition(() => {
         setResult({ extraction, reconciliation: reconcile(extraction) });
         setPhase("ready");
       });
     } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      const message =
-        err instanceof ExtractApiError || err instanceof Error
-          ? err.message
-          : "אירעה שגיאה בקריאת החשבוניות.";
+      if (controller.signal.aborted) return;
+      const message = err instanceof Error ? err.message : "אירעה שגיאה בקריאת החשבוניות.";
       setError(message);
       setPhase("error");
       setResult(null);
@@ -84,7 +81,7 @@ export default function App() {
           </div>
         </div>
         <p className="brand-bar__note">
-          פענוח קבצים: {parseMode === "client" ? "בדפדפן" : "בשרת"} · ספקים נתמכים: גרנות, שיווק החוף, ד. חי, אחים מנשרי, החקלאים, גליל שוק מקומי, שיווק העשור, בננות כרמל
+          הקבצים נקראים בדפדפן בלבד · ספקים נתמכים: גרנות, שיווק החוף, ד. חי, אחים מנשרי, החקלאים, גליל שוק מקומי, שיווק העשור, בננות כרמל
         </p>
       </header>
 
@@ -140,7 +137,7 @@ export default function App() {
 
       <footer className="site-foot">
         <span>הצמדה דטרמיניסטית · ללא AI</span>
-        <span>{parseMode === "client" ? "הקבצים לא יוצאים מהדפדפן" : "פענוח דרך ‎/api/extract"}</span>
+        <span>הקבצים לא יוצאים מהדפדפן</span>
       </footer>
     </div>
   );

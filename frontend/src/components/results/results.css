@@ -26,15 +26,6 @@
   color: var(--muted);
 }
 
-.badge {
-  display: inline-flex;
-  padding: 0.12rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  background: var(--ours-soft);
-  color: var(--ours);
-}
-
 .totals-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
