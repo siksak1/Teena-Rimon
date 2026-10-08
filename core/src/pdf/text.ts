@@ -30,7 +30,7 @@ export function parsePercent(value: string | undefined | null): number {
 
 /** "01/09/26" or "10/09/2026" → "2026-09-01". */
 export function parseDate(value: string | undefined | null): string | null {
-  const match = value?.match(/(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})/);
+  const match = value?.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})/);
   if (!match) return null;
   const [, d, m, y] = match;
   const year = y.length === 2 ? `20${y}` : y;

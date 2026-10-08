@@ -1,7 +1,10 @@
 /**
- * Product-name dictionary used by `NameMatcher`. Seeded from the Granot and
- * Shivuk HaHof samples — extend it as new suppliers / products appear
- * (unknown words show up in the result's `dictionarySuggestions`).
+ * Product-name dictionary used by `NameMatcher`. Optional enrichment: rows
+ * are matched on document, date, weight and price, and a product missing
+ * here still compares by the stem of its first word. Entries add what a stem
+ * cannot — cultivars, colours, grades, and real conflicts between known
+ * families. Seeded from the sample invoices; unknown words on matched rows
+ * show up in the result's `dictionarySuggestions`.
  *
  * Multi-word keys are allowed everywhere; longer phrases are matched first.
  */
@@ -10,8 +13,8 @@ export type NameDictionary = {
   families: string[];
   /** Alternative spellings of a family. */
   familyAliases: Record<string, string>;
-  /** Cultivar → family (and colour when the cultivar implies one). */
-  cultivars: Record<string, { family: string; color?: string }>;
+  /** Cultivar → family (and colour when the cultivar implies one); `as` merges spellings. */
+  cultivars: Record<string, { family: string; color?: string; as?: string }>;
   colors: Record<string, string>;
   /** Quality grade phrases → "א" | "ב". */
   grades: Record<string, string>;
@@ -34,12 +37,33 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     "נקטרינה",
     "שזיף",
     "אפרסק",
+    "עגבניה",
+    "שרי",
+    "בננה",
+    "פלפל",
+    "חציל",
+    "מלפפון",
+    "רימון",
+    "סלק",
+    "פסיפלורה",
+    "אננס",
+    "אבטיח",
+    "קולורבי",
+    "לוף",
+    "דלעת",
+    "כרוב",
+    "קישוא",
   ],
   familyAliases: {
     ענבים: "ענב",
+    עגבניות: "עגבניה",
+    "עגבניות שרי": "שרי",
+    "עגבניה שרי": "שרי",
+    קישואים: "קישוא",
     "תפוח עץ": "תפוח",
     "dragon fruit": "פיטאיה",
     pitaya: "פיטאיה",
+    פטאיה: "פיטאיה",
   },
   cultivars: {
     // Grapes
@@ -58,7 +82,16 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     סצומה: { family: "קלמנטינה" },
     האס: { family: "אבוקדו" },
     גליל: { family: "אבוקדו" },
+    אטינגר: { family: "אבוקדו" },
+    קנט: { family: "מנגו" },
     אודם: { family: "תפוח", color: "אדום" },
+    זהוב: { family: "תפוח", color: "צהוב" },
+    "דולצ'ה": { family: "תפוח", as: "דולציה" },
+    דולציה: { family: "תפוח" },
+    סמיט: { family: "תפוח" },
+    // Cherry tomatoes
+    ליקופן: { family: "שרי" },
+    לובלו: { family: "שרי" },
   },
   colors: {
     אדום: "אדום",
@@ -67,6 +100,10 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     לבנה: "לבן",
     צהוב: "צהוב",
     צהובה: "צהוב",
+    כתום: "כתום",
+    כתומה: "כתום",
+    ירוק: "ירוק",
+    ירוקה: "ירוק",
   },
   grades: {
     "סוג א": "א",
@@ -74,6 +111,16 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     תפזורת: "ב",
     בררה: "ב",
     נספק: "ב",
+    "אא'": "א",
+    אא: "א",
+    "א א": "א",
+    מובחר: "א",
+    // Galil's market tiers (Teena-Rimon abbreviates "שוק מו")
+    "שוק מוסדי": "מוסדי",
+    "שוק מו": "מוסדי",
+    מוסדי: "מוסדי",
+    "איכות יצוא": "יצוא",
+    יצוא: "יצוא",
   },
   sizes: {
     // Shivuk prints "סברס M" where Teena-Rimon writes "סברס קטן".
@@ -92,7 +139,16 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     "ללא מיתוג",
     "מיתוג",
     "מגש",
+    "במגש",
     "יבש",
+    // growing / market channel and cut — not a different product
+    "חממה",
+    "על האש",
+    "חתוך",
+    "אשכולות",
+    "באשכולות",
+    "שוק",
+    "תעשייתית",
     "עץ",
     // a mix of varieties — says nothing about the cultivar
     "מיקס",

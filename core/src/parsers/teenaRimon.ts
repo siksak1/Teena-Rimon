@@ -35,8 +35,12 @@ const COLUMNS: ColumnSpec<Key>[] = [
   { key: "total", header: /^סכום$/ },
 ];
 
+/**
+ * Some suppliers (e.g. D. Hai) also print from AGROLINE, so only the draft
+ * title identifies Teena-Rimon's side.
+ */
 export function isTeenaRimonDraft(doc: PdfDocument): boolean {
-  return doc.text.includes("AGROLINE") || doc.text.includes("חשבונית טיוטה");
+  return doc.text.includes("חשבונית טיוטה");
 }
 
 /**

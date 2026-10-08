@@ -78,7 +78,16 @@ export function MatchedGroupsTable({ groups, trDiscountPct, tone = "default" }: 
               <tr className="grp-summary">
                 <td colSpan={4}>
                   {g.flags.length === 0 ? (
-                    <span className="chip chip--ok">תואם</span>
+                    <>
+                      <span className="chip chip--ok">תואם</span>
+                      {g.notes.length > 0 && (
+                        <ul className="notes">
+                          {g.notes.map((n) => (
+                            <li key={n}>{n}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   ) : (
                     <>
                       <div className="chips">

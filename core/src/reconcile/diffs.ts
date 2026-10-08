@@ -55,6 +55,12 @@ export function describeGroup(
     flags.add("name");
     notes.push(...conflicts);
   }
+  // Matched on doc / date / numbers alone — informational, not a gap.
+  if (s.some((a) => t.some((b) => !matcher.compare(a.name, b.name).sameFamily))) {
+    const sNames = unique(s.map((x) => x.line.description));
+    const tNames = unique(t.map((x) => x.line.product));
+    notes.push(`שם: "${sNames.join(" / ")}" ↔ "${tNames.join(" / ")}" (לא זוהה כאותו מוצר; ההתאמה לפי מספרים)`);
+  }
 
   const sRefs = new Set(s.flatMap((x) => x.refs));
   const tRefs = unique(t.map((x) => x.line.supplierRef));

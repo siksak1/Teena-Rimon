@@ -1,4 +1,4 @@
-import { withinDateTolerance } from "./dates.js";
+import { DATE_TOLERANCE_DAYS, daysBetween, withinDateTolerance } from "./dates.js";
 import type { SLine, TLine } from "./prepare.js";
 
 /** A set of supplier rows and Teena-Rimon rows that describe the same delivery. */
@@ -6,6 +6,12 @@ export type Scope = { supplier: SLine[]; tr: TLine[] };
 
 /** Minimum content similarity to pair documents whose references differ. */
 const CONTENT_THRESHOLD = 0.5;
+/**
+ * Ranking bonus per day of date closeness: suppliers that ship the same goods
+ * every day (Carmel's bananas) have near-identical content, so the date has
+ * to decide. Small enough that a clearly better content match still wins.
+ */
+const SAME_DAY_BONUS_PER_DAY = 0.1;
 
 /**
  * Pair supplier delivery documents with Teena-Rimon documents.
@@ -35,17 +41,19 @@ export function pairDocuments(
   }
 
   // Pass B — content match for what is left.
-  const candidates: { sDoc: SLine[]; tDoc: TLine[]; score: number }[] = [];
+  const candidates: { sDoc: SLine[]; tDoc: TLine[]; rank: number }[] = [];
   for (const sDoc of sDocs) {
     if (pairedS.has(sDoc)) continue;
     for (const tDoc of tDocs) {
       if (pairedT.has(tDoc)) continue;
       if (!withinDateTolerance(sDoc[0].line.date, tDoc[0].line.date)) continue;
       const score = contentSimilarity(sDoc, tDoc);
-      if (score >= CONTENT_THRESHOLD) candidates.push({ sDoc, tDoc, score });
+      if (score < CONTENT_THRESHOLD) continue;
+      const days = Math.abs(daysBetween(sDoc[0].line.date, tDoc[0].line.date) ?? DATE_TOLERANCE_DAYS);
+      candidates.push({ sDoc, tDoc, rank: score + SAME_DAY_BONUS_PER_DAY * (DATE_TOLERANCE_DAYS - days) });
     }
   }
-  candidates.sort((a, b) => b.score - a.score);
+  candidates.sort((a, b) => b.rank - a.rank);
   for (const { sDoc, tDoc } of candidates) {
     if (pairedS.has(sDoc) || pairedT.has(tDoc)) continue;
     pairedS.add(sDoc);

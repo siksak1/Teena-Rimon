@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { normalizeRef } from "../src/reconcile/references.js";
 import type { ExtractionResult, MatchGroup, SupplierLine, TrLine } from "../src/model.js";
 import { reconcile } from "../src/reconcile/reconcile.js";
 import { extractSample } from "./helpers.js";
@@ -88,5 +89,65 @@ describe("reconcile — offsetting", () => {
     expect(result.totals.diff).toBe(0);
     expect(result.offset.applies).toBe(true);
     expect(result.offset.groups.map((g) => g.netDiff).sort()).toEqual([-100, 100]);
+  });
+});
+
+describe("normalizeRef", () => {
+  it("keeps the digits Teena-Rimon records for each supplier's document format", () => {
+    expect(normalizeRef("SH2610231")).toBe("2610231");
+    expect(normalizeRef("2SH2605495")).toBe("2605495");
+    expect(normalizeRef("21/265134")).toBe("265134");
+    expect(normalizeRef("4503")).toBe("4503");
+  });
+});
+
+/** Group as "S1+S2→T1+T3", rows sorted by id (absorbed rows are appended). */
+const sortedIds = (g: MatchGroup) => {
+  const byNum = (l: { id: string }[]) => l.map((x) => x.id).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+  return `${byNum(g.supplierLines).join("+")}→${byNum(g.trLines).join("+")}`;
+};
+
+describe("reconcile — names are a soft signal", () => {
+  it("matches every row of suppliers whose products are missing from the dictionary", async () => {
+    for (const pair of ["haklaim", "carmel", "hasor"] as const) {
+      const r = reconcile(await extractSample(pair));
+      expect([pair, r.supplierOnly, r.trOnly]).toEqual([pair, [], []]);
+    }
+  });
+
+  it("matches on doc and numbers alone and says so, without a gap flag", async () => {
+    const r = reconcile(await extractSample("menashri"));
+    const g = find(r.groups, "S31"); // "איקרם" (a tomato cultivar) ↔ "עגבניה אשכולות"
+    expect(sortedIds(g)).toBe("S31→T25+T26");
+    expect(g.flags).not.toContain("name");
+    expect(g.notes.some((n) => n.startsWith("שם:"))).toBe(true);
+    expect(r.supplierOnly).toEqual([]);
+    expect(r.trOnly).toEqual([]);
+  });
+});
+
+describe("reconcile — pairing deliveries by content", () => {
+  it("pairs Carmel's look-alike daily banana deliveries by the nearest date", async () => {
+    // Carmel's delivery numbers never match Teena-Rimon's, and every day is ~1,000 kg of bananas.
+    const r = reconcile(await extractSample("carmel"));
+    expect(new Set(r.groups.map((g) => g.dateDelta))).toEqual(new Set([0, 1]));
+  });
+});
+
+describe("reconcile — absorbing large splits", () => {
+  it("collects a 12-row split that the exact search cannot reach", async () => {
+    const r = reconcile(await extractSample("hasor"));
+    const g = find(r.groups, "S11"); // watermelon 7,240 kg
+    expect(g.trLines).toHaveLength(12);
+    expect(g.quantityDiff).toBe(0);
+  });
+
+  it("keeps Galil's market tiers and sizes apart and leaves truly extra rows unmatched", async () => {
+    const r = reconcile(await extractSample("galil"));
+    expect(sortedIds(find(r.groups, "S27"))).toBe("S27+S28+S29+S30+S31→T21"); // 5 × בינוני = 812 kg
+    expect(sortedIds(find(r.groups, "S7"))).toBe("S7+S8+S9+S10+S11+S12+S13→T6"); // שוק מוסדי
+    expect(r.trOnly).toEqual([]);
+    // Teena-Rimon has no row for these pomegranates.
+    expect(r.supplierOnly.map((l) => l.id)).toEqual(["S32", "S33", "S71"]);
   });
 });

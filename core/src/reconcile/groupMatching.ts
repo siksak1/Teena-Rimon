@@ -15,25 +15,37 @@ const SEARCH_NODE_LIMIT = 200_000;
 
 const WEIGHTS = { name: 0.2, quantity: 0.35, price: 0.25, packages: 0.1, date: 0.1 };
 
+export type MatchOptions = {
+  /**
+   * Across documents there is no reference to lean on: a pair whose names
+   * cannot be related must then agree on both weight and price (±5%).
+   */
+  strictUnrelatedNames?: boolean;
+  /**
+   * Inside one paired delivery, attach leftover rows to a same-family group
+   * when that brings the group's weights closer (splits too large or too
+   * uneven for the exact search), and pair leftovers of one family.
+   */
+  absorbLeftovers?: boolean;
+};
+
 /**
- * Match supplier rows to Teena-Rimon rows inside one scope. Groups are
- * 1:1, 1:k or k:1 and never cross product families. The chosen set covers
- * as many rows as possible, then maximises the total score.
+ * Match supplier rows to Teena-Rimon rows inside one scope. Names are a soft
+ * signal: any pair is a candidate unless both names are known, different
+ * products. Groups are 1:1, or 1:k / k:1 within one product family. The
+ * chosen set covers as many rows as possible, then maximises the total score.
  */
 export function matchGroups(
   supplier: SLine[],
   tr: TLine[],
   matcher: NameMatcher,
+  options: MatchOptions = {},
 ): { groups: Candidate[]; leftoverSupplier: SLine[]; leftoverTr: TLine[] } {
   const groups: Candidate[] = [];
-  const families = new Set(supplier.map((s) => s.name.family).filter((f): f is string => !!f));
-
-  for (const family of families) {
-    const s = supplier.filter((x) => x.name.family === family);
-    const t = tr.filter((x) => x.name.family === family);
-    if (t.length === 0) continue;
-    groups.push(...selectGroups(s, t, candidatesFor(s, t, matcher)));
+  for (const component of components(candidatesFor(supplier, tr, matcher, options))) {
+    groups.push(...selectGroups(component.s, component.t, component.candidates));
   }
+  if (options.absorbLeftovers) absorbLeftovers(groups, supplier, tr, matcher);
 
   const usedS = new Set(groups.flatMap((g) => g.s));
   const usedT = new Set(groups.flatMap((g) => g.t));
@@ -44,7 +56,7 @@ export function matchGroups(
   };
 }
 
-function candidatesFor(s: SLine[], t: TLine[], matcher: NameMatcher): Candidate[] {
+function candidatesFor(s: SLine[], t: TLine[], matcher: NameMatcher, options: MatchOptions): Candidate[] {
   const out: Candidate[] = [];
   const add = (sGroup: SLine[], tGroup: TLine[]) => {
     if (!sGroup.every((a) => tGroup.every((b) => withinDateTolerance(a.line.date, b.line.date)))) return;
@@ -53,10 +65,134 @@ function candidatesFor(s: SLine[], t: TLine[], matcher: NameMatcher): Candidate[
     out.push({ s: sGroup, t: tGroup, score: scoreGroup(sGroup, tGroup, matcher) });
   };
 
-  for (const a of s) for (const b of t) add([a], [b]);
-  for (const a of s) for (const subset of subsets(t, 2, MAX_GROUP_SIZE)) add([a], subset);
-  for (const b of t) for (const subset of subsets(s, 2, MAX_GROUP_SIZE)) add(subset, [b]);
+  for (const a of s) {
+    for (const b of t) {
+      const name = matcher.compare(a.name, b.name);
+      if (!name.compatible) continue;
+      if (options.strictUnrelatedNames && !name.sameFamily && !numbersAgree(a, b)) continue;
+      add([a], [b]);
+    }
+  }
+  // Splits only within one family: summing unrelated rows finds coincidences.
+  const sameFamily = (x: SLine | TLine, y: SLine | TLine) => matcher.compare(x.name, y.name).sameFamily;
+  for (const a of s) {
+    for (const subset of subsets(t.filter((b) => sameFamily(a, b)), 2, MAX_GROUP_SIZE)) add([a], subset);
+  }
+  for (const b of t) {
+    for (const subset of subsets(s.filter((a) => sameFamily(a, b)), 2, MAX_GROUP_SIZE)) add(subset, [b]);
+  }
   return out.sort((x, y) => y.score - x.score);
+}
+
+/**
+ * Split candidates into independent sets (no shared rows between sets), so
+ * the exhaustive search runs on small problems.
+ */
+function components(candidates: Candidate[]): { s: SLine[]; t: TLine[]; candidates: Candidate[] }[] {
+  const parent = new Map<SLine | TLine, SLine | TLine>();
+  const find = (x: SLine | TLine): SLine | TLine => {
+    const p = parent.get(x) ?? x;
+    if (p === x) return x;
+    const root = find(p);
+    parent.set(x, root);
+    return root;
+  };
+  for (const c of candidates) {
+    const [first, ...rest] = [...c.s, ...c.t];
+    for (const x of rest) parent.set(find(x), find(first));
+  }
+  const byRoot = new Map<SLine | TLine, { s: Set<SLine>; t: Set<TLine>; candidates: Candidate[] }>();
+  for (const c of candidates) {
+    const root = find(c.s[0]);
+    let entry = byRoot.get(root);
+    if (!entry) byRoot.set(root, (entry = { s: new Set(), t: new Set(), candidates: [] }));
+    c.s.forEach((x) => entry.s.add(x));
+    c.t.forEach((x) => entry.t.add(x));
+    entry.candidates.push(c);
+  }
+  return [...byRoot.values()].map((e) => ({ s: [...e.s], t: [...e.t], candidates: e.candidates }));
+}
+
+/**
+ * Greedy clean-up after the exact search, largest rows first:
+ *  - a leftover row joins the group (best name score first) whose weight
+ *    gap it reduces the most — never one it would worsen, so a genuinely
+ *    extra row stays unmatched. It must be the same family as the other
+ *    side, or as the rows already on its own side ("more of the same");
+ *  - otherwise, if the other side has leftovers of the same family, the two
+ *    best-named rows open a new group.
+ * Mutates `groups`.
+ */
+function absorbLeftovers(groups: Candidate[], supplier: SLine[], tr: TLine[], matcher: NameMatcher): void {
+  const used = new Set<SLine | TLine>(groups.flatMap((g) => [...g.s, ...g.t]));
+  const nameScore = (x: SLine | TLine, others: (SLine | TLine)[]) => {
+    const scores = others.map((o) => matcher.compare(x.name, o.name));
+    if (scores.length === 0 || !scores.every((c) => c.sameFamily)) return -1;
+    return Math.max(...scores.map((c) => c.score));
+  };
+  const datesOk = (x: SLine | TLine, others: (SLine | TLine)[]) =>
+    others.every((o) => withinDateTolerance(x.line.date, o.line.date));
+  const kg = (rows: (SLine | TLine)[]) => sumOf(rows, (r) => r.line.quantity);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const leftovers = [
+      ...supplier.filter((x) => !used.has(x)).map((x) => ({ row: x as SLine | TLine, side: "s" as const })),
+      ...tr.filter((x) => !used.has(x)).map((x) => ({ row: x as SLine | TLine, side: "t" as const })),
+    ].sort((a, b) => b.row.line.quantity - a.row.line.quantity);
+
+    for (const { row, side } of leftovers) {
+      // 1. Join an existing group.
+      let best: { group: Candidate; name: number; gain: number } | null = null;
+      for (const group of groups) {
+        const other = side === "s" ? group.t : group.s;
+        const own = side === "s" ? group.s : group.t;
+        const name = Math.max(nameScore(row, other), nameScore(row, own) >= 0 ? 0 : -1);
+        if (name < 0 || !datesOk(row, other)) continue;
+        const before = Math.abs(kg(group.s) - kg(group.t));
+        const sKg = kg(group.s) + (side === "s" ? row.line.quantity : 0);
+        const tKg = kg(group.t) + (side === "t" ? row.line.quantity : 0);
+        const gain = before - Math.abs(sKg - tKg);
+        if (gain <= 0) continue;
+        if (!best || name > best.name + 1e-9 || (Math.abs(name - best.name) <= 1e-9 && gain > best.gain)) {
+          best = { group, name, gain };
+        }
+      }
+      if (best) {
+        if (side === "s") best.group.s.push(row as SLine);
+        else best.group.t.push(row as TLine);
+        best.group.score = scoreGroup(best.group.s, best.group.t, matcher);
+        used.add(row);
+        changed = true;
+        break;
+      }
+
+      // 2. Open a group with the best-named leftover on the other side.
+      const pool = (side === "s" ? tr : supplier).filter((x) => !used.has(x) && datesOk(row, [x]));
+      const partner = pool
+        .map((x) => ({ x, name: nameScore(row, [x]) }))
+        .filter((c) => c.name >= 0)
+        .sort((a, b) => b.name - a.name)[0];
+      if (partner) {
+        const sRows = [side === "s" ? row : partner.x] as SLine[];
+        const tRows = [side === "t" ? row : partner.x] as TLine[];
+        groups.push({ s: sRows, t: tRows, score: scoreGroup(sRows, tRows, matcher) });
+        used.add(row);
+        used.add(partner.x);
+        changed = true;
+        break;
+      }
+    }
+  }
+}
+
+/** Weight and price both within the 5% threshold. */
+function numbersAgree(s: SLine, t: TLine): boolean {
+  return (
+    relDiff(s.line.quantity, t.line.quantity) <= REJECT_RELATIVE_DIFF &&
+    relDiff(s.line.unitPrice, t.line.unitPrice) <= REJECT_RELATIVE_DIFF
+  );
 }
 
 /** Same item even with big gaps — unless weight AND price are both off by >5%. */

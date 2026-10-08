@@ -1,7 +1,7 @@
 import { ExtractionError } from "./errors.js";
 import type { ExtractionResult, ParseMode } from "./model.js";
 import { loadPdf } from "./pdf/layout.js";
-import { detectSupplier, SUPPLIER_PARSERS } from "./parsers/registry.js";
+import { detectSupplier, SUPPLIER_PARSERS, UNSUPPORTED_SUPPLIERS } from "./parsers/registry.js";
 import { isTeenaRimonDraft, parseTeenaRimon } from "./parsers/teenaRimon.js";
 
 export type ExtractInput = {
@@ -36,6 +36,8 @@ export async function extractInvoices(input: ExtractInput): Promise<ExtractionRe
 
   const parser = detectSupplier(supplierDoc);
   if (!parser) {
+    const known = UNSUPPORTED_SUPPLIERS.find((u) => supplierDoc.text.includes(u.vatId));
+    if (known) throw new ExtractionError(`חשבונית ${known.name} אינה נתמכת: ${known.reason}`);
     const supported = SUPPLIER_PARSERS.map((p) => p.displayName).join(", ");
     throw new ExtractionError(
       `הספק בקובץ "${input.supplierFileName}" אינו נתמך עדיין. ספקים נתמכים: ${supported}`,

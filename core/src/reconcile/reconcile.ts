@@ -28,14 +28,14 @@ export function reconcile(
   const leftoverS = [...unpairedSupplier];
   const leftoverT = [...unpairedTr];
   for (const scope of scopes) {
-    const r = matchGroups(scope.supplier, scope.tr, matcher);
+    const r = matchGroups(scope.supplier, scope.tr, matcher, { absorbLeftovers: true });
     candidates.push(...r.groups);
     leftoverS.push(...r.leftoverSupplier);
     leftoverT.push(...r.leftoverTr);
   }
 
-  // 3. Leftover pass: rows still unmatched, across documents (±2 days, same family).
-  const last = matchGroups(leftoverS, leftoverT, matcher);
+  // 3. Leftover pass: rows still unmatched, across documents (±2 days; unrelated names need equal numbers).
+  const last = matchGroups(leftoverS, leftoverT, matcher, { strictUnrelatedNames: true });
   candidates.push(...last.groups);
 
   const groups = candidates

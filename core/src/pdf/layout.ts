@@ -1,5 +1,5 @@
 import { getDocumentProxy } from "unpdf";
-import { collapseWhitespace, fixMirroring } from "./text.js";
+import { collapseWhitespace, fixMirroring, parseNumber } from "./text.js";
 
 export type TextItem = {
   page: number;
@@ -158,4 +158,72 @@ export function readRow<K extends string>(
 
 export function cellText(cells: Cell[]): string {
   return cells.map((c) => c.text).join(" ");
+}
+
+/** Stacked header lines (e.g. "מחיר" over "ליחידה") are at most this far apart. */
+const HEADER_STACK_GAP = 15;
+
+/**
+ * Like `columnsFromHeader`, for a header printed over two or three stacked
+ * rows: cells that sit one above the other are joined top-to-bottom
+ * ("סה"כ" + "מחיר" → "סה"כ מחיר") before the specs are matched.
+ */
+export function columnsFromHeaderRows<K extends string>(
+  rows: Row[],
+  index: number,
+  specs: ColumnSpec<K>[],
+): Columns<K> | null {
+  const first = rows[index];
+  const stack = [first];
+  for (const next of rows.slice(index + 1, index + 3)) {
+    const prev = stack.at(-1)!;
+    if (next.page !== prev.page || prev.y - next.y > HEADER_STACK_GAP) break;
+    stack.push(next);
+  }
+  const merged: Cell[] = [];
+  for (const row of stack) {
+    for (const cell of row.cells) {
+      const above = merged.find((m) => cell.xMin <= m.xMax && cell.xMax >= m.xMin);
+      if (above) {
+        above.text = `${above.text} ${cell.text}`;
+        above.xMin = Math.min(above.xMin, cell.xMin);
+        above.xMax = Math.max(above.xMax, cell.xMax);
+        above.x = (above.xMin + above.xMax) / 2;
+      } else {
+        merged.push({ ...cell });
+      }
+    }
+  }
+  return columnsFromHeader({ ...first, cells: merged, text: merged.map((c) => c.text).join("  ") }, specs);
+}
+
+/** A wrapped cell line sits this close above or below its data row. */
+const WRAP_GAP = 8;
+
+/**
+ * Text of a cell that wraps onto lines printed just above and below its data
+ * row (e.g. "אבוקדו גליל שוק" / row / "מוסדי"). Only single-cell rows near
+ * `columnX` count; the in-row text goes in the middle.
+ */
+export function wrappedText(rows: Row[], dataRow: Row, columnX: number, inRow: string): string {
+  const near = (r: Row) =>
+    r !== dataRow &&
+    r.page === dataRow.page &&
+    Math.abs(r.y - dataRow.y) <= WRAP_GAP &&
+    r.cells.length === 1 &&
+    Math.abs(r.cells[0].x - columnX) <= 30;
+  const above = rows.filter((r) => near(r) && r.y > dataRow.y).map((r) => r.cells[0].text);
+  const below = rows.filter((r) => near(r) && r.y < dataRow.y).map((r) => r.cells[0].text);
+  return [...above, inRow, ...below].filter(Boolean).join(" ");
+}
+
+/**
+ * Leftmost money amount on the first row whose text includes `label`, e.g.
+ * "מחיר כולל  13,433.66" or "סה"כ ש"ח  : 70628.50". Percentages are ignored.
+ */
+export function amountOnRow(doc: PdfDocument, label: string): number | null {
+  const row = doc.rows.find((r) => r.text.includes(label));
+  const amounts = row?.cells.filter((c) => /\d\.\d{2}\b/.test(c.text) && !c.text.includes("%")) ?? [];
+  if (amounts.length === 0) return null;
+  return parseNumber(amounts.reduce((a, b) => (a.x < b.x ? a : b)).text);
 }

@@ -31,8 +31,38 @@ describe("NameMatcher", () => {
     expect(cmp(["כרם יבולי גלעד - סוויט סלבריישן - מיתוג"], ["ענב לבן"]).conflicts).toEqual(["צבע: אדום ≠ לבן"]);
   });
 
-  it("scores different families as zero", () => {
-    expect(cmp(["תפוח עץ אודם"], ["נקטרינה", "60"])).toEqual({ score: 0, sameFamily: false, conflicts: [] });
+  it("rules out two different known families", () => {
+    expect(cmp(["תפוח עץ אודם"], ["נקטרינה", "60"])).toEqual({
+      score: 0,
+      sameFamily: false,
+      compatible: false,
+      conflicts: [],
+    });
+    expect(cmp(["מלפפון"], ["עגבניה אשכולות"]).compatible).toBe(false);
+  });
+
+  it.each([
+    [["עגבניות באשכולות"], ["עגבניה אשכולות"]],
+    [["בננה אא' במגש"], ["בננה"]],
+    [["אבוקדו גליל שוק מוסדי"], ["אבוקדו גליל", "שוק מו"]],
+    [["עגבניות שרי לובלו"], ["שרי לובלו"]],
+    [["תפוח דולצ'ה"], ["תפוח עץ דולציה"]],
+  ])("%j matches %j (new suppliers)", (a, b) => {
+    const r = cmp(a, b);
+    expect(r.sameFamily).toBe(true);
+    expect(r.conflicts).toEqual([]);
+  });
+
+  it("falls back to the word stem for products missing from the dictionary", () => {
+    const a = m.parse("גויאבות");
+    expect(a).toMatchObject({ family: "גויאב", familySource: "stem" });
+    expect(m.compare(a, m.parse("גויאבה")).sameFamily).toBe(true);
+  });
+
+  it("keeps unrelated or unknown names compatible, with a neutral score", () => {
+    const r = cmp(["איקרם"], ["עגבניה אשכולות"]);
+    expect(r).toMatchObject({ sameFamily: false, compatible: true, conflicts: [] });
+    expect(r.score).toBeGreaterThan(0);
   });
 
   it("collects unknown words", () => {
