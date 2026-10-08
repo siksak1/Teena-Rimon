@@ -443,6 +443,10 @@ input {
   font-size: 0.8rem;
 }
 
+.site-foot__version bdi {
+  font-family: var(--font-mono);
+}
+
 @media (max-width: 860px) {
   .upload-grid {
     grid-template-columns: 1fr;

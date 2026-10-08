@@ -138,6 +138,9 @@ export default function App() {
       <footer className="site-foot">
         <span>הצמדה דטרמיניסטית · ללא AI</span>
         <span>הקבצים לא יוצאים מהדפדפן</span>
+        <span className="site-foot__version">
+          גרסה <bdi>{__APP_VERSION__} ({__APP_COMMIT__})</bdi>
+        </span>
       </footer>
     </div>
   );
