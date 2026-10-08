@@ -9,6 +9,7 @@
     "typecheck": "npm run typecheck --prefix core && CUSTOMER=teena-rimon npm run build --prefix frontend && npm run typecheck --prefix infra",
     "install:all": "npm install --prefix core && npm install --prefix frontend && npm install --prefix infra",
     "test": "npm test --prefix core && npm test --prefix infra",
+    "e2e": "npm run e2e --prefix frontend",
     "fixtures:update": "npm run fixtures:update --prefix core"
   }
 }

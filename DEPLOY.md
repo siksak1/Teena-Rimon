@@ -34,7 +34,7 @@ npx cdk deploy    # first time ~5–10 min (CloudFront)
 
 ## Releasing a customer's app
 
-Run releases from your own machine. Commit first, because a release refuses uncommitted changes to `core/`, `frontend/`, `customers/` or `package.json`.
+Run releases from your own machine. Commit first, because a release refuses uncommitted changes to `core/`, `frontend/`, `customers/` or `package.json`. It also runs `npm test` and `npm run e2e` first and stops if either fails.
 
 ```bash
 scripts/release.sh teena-rimon               # test → build → upload → point production URLs

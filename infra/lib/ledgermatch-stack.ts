@@ -13,28 +13,17 @@ export interface LedgerMatchStackProps extends cdk.StackProps {
   certificateArn?: string;
 }
 
-/** The only origin the app may contact (usage analytics); see frontend/src/analytics.ts. */
-const ANALYTICS_ORIGIN = "https://eu.i.posthog.com";
-
 /**
- * Invoice files are parsed in the browser, so the page may only load its own
- * files and talk to the analytics endpoint — nothing else, even by mistake.
+ * CSP (own files + the analytics endpoint only), noindex, no referrer —
+ * shared with the end-to-end test server, so tests run under these exact headers.
  */
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'none'",
-  "script-src 'self'",
-  "style-src 'self'",
-  "font-src 'self'",
-  "img-src 'self' data:",
-  `connect-src ${ANALYTICS_ORIGIN}`,
-  "worker-src 'self'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-].join("; ");
-
-const NOINDEX = "noindex, nofollow, noarchive";
+const HEADERS: {
+  contentSecurityPolicy: string[];
+  robots: string;
+  referrerPolicy: string;
+  permissionsPolicy: string;
+} = JSON.parse(readFileSync(new URL("../security-headers.json", import.meta.url), "utf8"));
+if (HEADERS.referrerPolicy !== "no-referrer") throw new Error("security-headers.json: referrerPolicy must stay no-referrer");
 
 /**
  * Static hosting for every customer's build, with no server code:
@@ -83,7 +72,7 @@ export class LedgerMatchStack extends cdk.Stack {
     const headers = new cloudfront.ResponseHeadersPolicy(this, "SecurityHeaders", {
       comment: "LedgerMatch: CSP (analytics only), noindex, no referrer",
       securityHeadersBehavior: {
-        contentSecurityPolicy: { contentSecurityPolicy: CONTENT_SECURITY_POLICY, override: true },
+        contentSecurityPolicy: { contentSecurityPolicy: HEADERS.contentSecurityPolicy.join("; "), override: true },
         contentTypeOptions: { override: true },
         frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
         referrerPolicy: { referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER, override: true },
@@ -95,8 +84,8 @@ export class LedgerMatchStack extends cdk.Stack {
       },
       customHeadersBehavior: {
         customHeaders: [
-          { header: "X-Robots-Tag", value: NOINDEX, override: true },
-          { header: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()", override: true },
+          { header: "X-Robots-Tag", value: HEADERS.robots, override: true },
+          { header: "Permissions-Policy", value: HEADERS.permissionsPolicy, override: true },
         ],
       },
     });

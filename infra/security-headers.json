@@ -1,0 +1,19 @@
+{
+  "$comment": "Response headers for every page and file. Used by the CloudFront stack (lib/ledgermatch-stack.ts) and by the end-to-end test server (frontend/e2e/serve.mjs), so the test checks the app under exactly what production sends. Invoice files are parsed in the browser: the page may only load its own files and talk to the analytics endpoint.",
+  "contentSecurityPolicy": [
+    "default-src 'none'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "font-src 'self'",
+    "img-src 'self' data:",
+    "connect-src https://eu.i.posthog.com",
+    "worker-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+    "object-src 'none'"
+  ],
+  "robots": "noindex, nofollow, noarchive",
+  "referrerPolicy": "no-referrer",
+  "permissionsPolicy": "camera=(), microphone=(), geolocation=()"
+}

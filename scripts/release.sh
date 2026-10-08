@@ -67,6 +67,7 @@ case "$MODE" in
 
     echo "Testing…"
     npm test --silent >/dev/null 2>&1 || die "tests failed (run npm test)"
+    npm run e2e --silent >/dev/null 2>&1 || die "end-to-end tests failed (run npm run e2e)"
 
     echo "Building $SLUG $BUILD…"
     CUSTOMER="$SLUG" npm run build --silent >/dev/null

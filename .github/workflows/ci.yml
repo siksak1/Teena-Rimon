@@ -1,0 +1,37 @@
+# Tests only — releases are made from the developer's machine (scripts/release.sh).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci --prefix core && npm ci --prefix frontend && npm ci --prefix infra
+
+      - name: Unit, regression-fixture and routing-function tests
+        run: npm test
+
+      - name: Typecheck and build
+        run: npm run typecheck
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests (production build, production headers)
+        run: npm run e2e --prefix frontend

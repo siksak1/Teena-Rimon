@@ -34,7 +34,8 @@ Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core
 ```bash
 npm run install:all
 npm run dev          # UI on :43123
-npm test             # core tests (parsers on the sample PDFs, engine, customer configs)
+npm test             # core tests (parsers on the sample PDFs, engine, customer configs, fixtures) + routing function
+npm run e2e          # production build in Chromium under the production headers (first: npx --prefix frontend playwright install chromium)
 ```
 
 ## Usage analytics (counts only)
@@ -58,6 +59,12 @@ git diff customers/       # review every changed result before committing
 ```
 
 To add a case: put the two PDFs in `sample_data/`, add an entry to `cases.json`, run `npm run fixtures:update`, and check the new `.expected.json` against a manual reconciliation. A case may also expect an error (e.g. a scanned invoice).
+
+## End-to-end tests and CI
+
+`frontend/e2e/app.spec.ts` (Playwright) runs the production build, served under a fake customer token with exactly the headers CloudFront sends (`infra/security-headers.json`, shared with the stack). It reconciles real sample invoices and checks that the only request leaving the page is one counts-only analytics event (intercepted, so nothing reaches PostHog), that the page is `noindex`, that there are no CSP violations, and that the browser blocks uploads anywhere else, even to our own server.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `npm test`, the typecheck/build and the end-to-end tests on every push to `main` and every pull request. It only runs tests; releases are made with `scripts/release.sh`, which also runs both suites first.
 
 ## Supported formats
 
