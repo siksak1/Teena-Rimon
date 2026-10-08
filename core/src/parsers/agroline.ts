@@ -48,7 +48,7 @@ type AgrolineSupplier = { id: string; displayName: string; vatId: string };
  * "חשבונית מס (שווק)"). Every row carries its own date and delivery number
  * ("ת.משלוח"). Line totals are printed before the discount, which is applied
  * once in the footer ("הנחה 12.0%"); the footer starts at "פדיון".
- * Teena-Rimon's drafts come from AGROLINE too, so detect by VAT id only.
+ * The wholesaler's own drafts come from AGROLINE too, so detect by VAT id only.
  */
 function agrolineParser({ id, displayName, vatId }: AgrolineSupplier): SupplierParser {
   const label = `חשבונית ${displayName}`;

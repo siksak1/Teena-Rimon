@@ -1,6 +1,7 @@
 import { useRef, useState, useTransition } from "react";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
 import { reconcile } from "@core/reconcile/reconcile.js";
+import customer from "@customer-config";
 import { extractInvoices } from "./api/extract";
 import { FileDropZone } from "./components/FileDropZone";
 import { ReconciliationView } from "./components/results/ReconciliationView";
@@ -10,7 +11,7 @@ import "./components/results/results.css";
 type UiPhase = "idle" | "extracting" | "ready" | "error";
 
 export default function App() {
-  const [trFile, setTrFile] = useState<File | null>(null);
+  const [ownFile, setOwnFile] = useState<File | null>(null);
   const [supplierFile, setSupplierFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<UiPhase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -21,10 +22,10 @@ export default function App() {
   const [isPending, startTransition] = useTransition();
   const abortRef = useRef<AbortController | null>(null);
 
-  const canCompare = Boolean(trFile && supplierFile) && phase !== "extracting";
+  const canCompare = Boolean(ownFile && supplierFile) && phase !== "extracting";
 
   async function handleCompare() {
-    if (!trFile || !supplierFile) return;
+    if (!ownFile || !supplierFile) return;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -34,11 +35,11 @@ export default function App() {
     setError(null);
 
     try {
-      const extraction = await extractInvoices(trFile, supplierFile);
+      const extraction = await extractInvoices(ownFile, supplierFile);
       // Parsing can't be cancelled; ignore results that arrive after a reset or a newer run.
       if (controller.signal.aborted) return;
       startTransition(() => {
-        setResult({ extraction, reconciliation: reconcile(extraction) });
+        setResult({ extraction, reconciliation: reconcile(extraction, customer) });
         setPhase("ready");
       });
     } catch (err) {
@@ -52,7 +53,7 @@ export default function App() {
 
   function handleReset() {
     abortRef.current?.abort();
-    setTrFile(null);
+    setOwnFile(null);
     setSupplierFile(null);
     setResult(null);
     setError(null);
@@ -87,19 +88,19 @@ export default function App() {
 
       <main className="shell">
         <section className="hero-copy">
-          <h1>השוואת חשבונית ספק מול תאנה ורימון</h1>
+          <h1>השוואת חשבונית ספק מול {customer.displayName}</h1>
           <p>
-            העלו את טיוטת תאנה ורימון ואת חשבונית הספק. כל שורה של הספק מוצמדת לשורות
+            העלו את חשבונית {customer.displayName} ואת חשבונית הספק. כל שורה של הספק מוצמדת לשורות
             המתאימות לפי תעודה, תאריך, פריט, משקל ומחיר — והפערים מוצגים לפי סיבה.
           </p>
         </section>
 
         <div className="upload-grid">
           <FileDropZone
-            label="חשבונית תאנה ורימון"
-            hint="טיוטת AGROLINE (חשבונית טיוטה)"
-            file={trFile}
-            onFile={pick(setTrFile)}
+            label={`חשבונית ${customer.displayName}`}
+            hint={customer.ownDocument.label}
+            file={ownFile}
+            onFile={pick(setOwnFile)}
             accent="ours"
           />
           <FileDropZone

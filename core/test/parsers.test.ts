@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { extractInvoices } from "../src/extract.js";
 import { ExtractionError } from "../src/errors.js";
-import { extractSample, PAIRS, readSample } from "./helpers.js";
+import { extractSample, PAIRS, readSample, TEENA_RIMON } from "./helpers.js";
 
 const sum = (xs: { lineTotal: number }[]) => Math.round(xs.reduce((a, x) => a + x.lineTotal, 0) * 100) / 100;
 
 describe("Granot parser", () => {
   it("reads every item line and matches the printed totals", async () => {
-    const { supplier, teenaRimon } = await extractSample("granot");
+    const { supplier, own } = await extractSample("granot");
     expect(supplier.supplierId).toBe("granot");
     expect(supplier.invoiceNumber).toBe("SI26602203");
     expect(supplier.lines).toHaveLength(29);
@@ -15,12 +15,12 @@ describe("Granot parser", () => {
     expect(supplier.printedItemsTotal).toBe(77379.76);
     expect(supplier.warnings).toEqual([]);
 
-    expect(teenaRimon.lines).toHaveLength(25);
-    expect(sum(teenaRimon.lines)).toBe(84684.1);
-    expect(teenaRimon.commercialDiscount).toBe(10162.11);
-    expect(teenaRimon.discountPct).toBeCloseTo(0.12, 5);
-    expect(teenaRimon.againstInvoice).toBe("26602203");
-    expect(teenaRimon.warnings).toEqual([]);
+    expect(own.lines).toHaveLength(25);
+    expect(sum(own.lines)).toBe(84684.1);
+    expect(own.commercialDiscount).toBe(10162.11);
+    expect(own.discountPct).toBeCloseTo(0.12, 5);
+    expect(own.againstInvoice).toBe("26602203");
+    expect(own.warnings).toEqual([]);
   });
 
   it("inherits date / doc / book reference from earlier rows", async () => {
@@ -33,20 +33,20 @@ describe("Granot parser", () => {
   });
 
   it("splits Teena-Rimon's doc number from the supplier reference", async () => {
-    const { teenaRimon } = await extractSample("granot");
-    expect(teenaRimon.lines[0]).toMatchObject({ trDocNumber: "23103", supplierRef: "2610231", product: "פיטאיה", size: "מיקס" });
+    const { own } = await extractSample("granot");
+    expect(own.lines[0]).toMatchObject({ ownDocNumber: "23103", supplierRef: "2610231", product: "פיטאיה", size: "מיקס" });
   });
 });
 
 describe("Shivuk HaHof parser", () => {
   it("reads every item line, across pages, and matches the printed totals", async () => {
-    const { supplier, teenaRimon } = await extractSample("shivuk");
+    const { supplier, own } = await extractSample("shivuk");
     expect(supplier.supplierId).toBe("shivuk-hahof");
     expect(supplier.lines).toHaveLength(28);
     expect(sum(supplier.lines)).toBe(138544.89);
     expect(supplier.warnings).toEqual([]);
-    expect(teenaRimon.lines).toHaveLength(37);
-    expect(sum(teenaRimon.lines)).toBe(156512.1);
+    expect(own.lines).toHaveLength(37);
+    expect(sum(own.lines)).toBe(156512.1);
   });
 
   it("detects the line printed without a discount", async () => {
@@ -64,7 +64,7 @@ describe("Shivuk HaHof parser", () => {
 
 describe("D. Hai parser", () => {
   it("reads every item line and matches the printed gross and net totals", async () => {
-    const { supplier, teenaRimon } = await extractSample("dhai");
+    const { supplier, own } = await extractSample("dhai");
     expect(supplier.supplierId).toBe("d-hai");
     expect(supplier.invoiceNumber).toBe("32974");
     expect(supplier.invoiceDate).toBe("2026-09-22");
@@ -75,10 +75,10 @@ describe("D. Hai parser", () => {
     expect(supplier.lines.every((l) => l.discountPct === 0.12)).toBe(true);
     expect(supplier.warnings).toEqual([]);
 
-    expect(teenaRimon.lines).toHaveLength(40);
-    expect(sum(teenaRimon.lines)).toBe(119547.81);
-    expect(teenaRimon.commercialDiscount).toBe(11338.8);
-    expect(teenaRimon.warnings).toEqual([]);
+    expect(own.lines).toHaveLength(40);
+    expect(sum(own.lines)).toBe(119547.81);
+    expect(own.commercialDiscount).toBe(11338.8);
+    expect(own.warnings).toEqual([]);
   });
 
   it("reads the per-row date, delivery number, size and booklet reference", async () => {
@@ -98,18 +98,18 @@ describe("D. Hai parser", () => {
 
   it("is not mistaken for a Teena-Rimon draft although it is printed by AGROLINE", async () => {
     const promise = extractInvoices({
-      trPdf: await readSample(PAIRS.dhai.supplier),
-      supplierPdf: await readSample(PAIRS.dhai.tr),
-      trFileName: "a.pdf",
+      ownPdf: await readSample(PAIRS.dhai.supplier),
+      supplierPdf: await readSample(PAIRS.dhai.own),
+      ownFileName: "a.pdf",
       supplierFileName: "b.pdf",
-    });
+    }, TEENA_RIMON);
     await expect(promise).rejects.toThrow("הוחלפו");
   });
 });
 
 describe("Achim Menashri parser (AGROLINE)", () => {
   it("reads every item line and matches the printed gross and net totals", async () => {
-    const { supplier, teenaRimon } = await extractSample("menashri");
+    const { supplier, own } = await extractSample("menashri");
     expect(supplier.supplierId).toBe("menashri");
     expect(supplier.invoiceNumber).toBe("70354");
     expect(supplier.invoiceDate).toBe("2026-10-07");
@@ -120,15 +120,15 @@ describe("Achim Menashri parser (AGROLINE)", () => {
     expect(supplier.warnings).toEqual([]);
     expect(supplier.lines[0]).toMatchObject({ date: "2026-07-12", docNumber: "4503", description: "סלק אדום", quantity: 751 });
 
-    expect(teenaRimon.lines).toHaveLength(33);
+    expect(own.lines).toHaveLength(33);
     // The sample draft was issued against another Menashri invoice.
-    expect(teenaRimon.warnings).toEqual([expect.stringContaining("כנגד חשבונית 20231")]);
+    expect(own.warnings).toEqual([expect.stringContaining("כנגד חשבונית 20231")]);
   });
 });
 
 describe("HaHaklaim parser", () => {
   it("reads the item lines, leaves out the pallet deposit and matches the printed total", async () => {
-    const { supplier, teenaRimon } = await extractSample("haklaim");
+    const { supplier, own } = await extractSample("haklaim");
     expect(supplier.supplierId).toBe("haklaim");
     expect(supplier.invoiceNumber).toBe("SI266001908");
     expect(supplier.invoiceDate).toBe("2026-09-17");
@@ -148,8 +148,8 @@ describe("HaHaklaim parser", () => {
       lineTotal: 4794.24,
     });
 
-    expect(teenaRimon.lines).toHaveLength(5);
-    expect(teenaRimon.warnings).toEqual([]);
+    expect(own.lines).toHaveLength(5);
+    expect(own.warnings).toEqual([]);
   });
 });
 
@@ -183,7 +183,7 @@ describe("Galil Shuk Mekomi parser", () => {
 
 describe("Shivuk HaAsor parser", () => {
   it("reads item rows only and matches the printed gross and net totals", async () => {
-    const { supplier, teenaRimon } = await extractSample("hasor");
+    const { supplier, own } = await extractSample("hasor");
     expect(supplier.supplierId).toBe("hasor");
     expect(supplier.invoiceNumber).toBe("12/260983");
     expect(supplier.invoiceDate).toBe("2026-09-18");
@@ -193,7 +193,7 @@ describe("Shivuk HaAsor parser", () => {
     expect(sum(supplier.lines)).toBe(105682.11);
     expect(supplier.lines.every((l) => l.discountPct === 0.12)).toBe(true);
     expect(supplier.warnings).toEqual([]);
-    expect(teenaRimon.warnings).toEqual([]);
+    expect(own.warnings).toEqual([]);
   });
 
   it("uses the package count for items sold by the unit and joins a wrapped quality code", async () => {
@@ -213,7 +213,7 @@ describe("Shivuk HaAsor parser", () => {
 
 describe("Bananot Carmel parser", () => {
   it("reads every item line, without pallet deposits, and matches the printed total", async () => {
-    const { supplier, teenaRimon } = await extractSample("carmel");
+    const { supplier, own } = await extractSample("carmel");
     expect(supplier.supplierId).toBe("carmel");
     expect(supplier.invoiceNumber).toBe("61345");
     expect(supplier.invoiceDate).toBe("2026-09-18");
@@ -222,8 +222,8 @@ describe("Bananot Carmel parser", () => {
     expect(supplier.printedItemsTotal).toBe(70078.5);
     expect(supplier.warnings).toEqual([]);
 
-    expect(teenaRimon.lines).toHaveLength(25);
-    expect(teenaRimon.commercialDiscount).toBe(0);
+    expect(own.lines).toHaveLength(25);
+    expect(own.commercialDiscount).toBe(0);
   });
 
   it("carries the delivery date and number onto its rows, across the page break", async () => {
@@ -251,22 +251,22 @@ describe("Har HaKor", () => {
 describe("slot validation", () => {
   it("rejects swapped files with a clear message", async () => {
     const promise = extractInvoices({
-      trPdf: await readSample(PAIRS.granot.supplier),
-      supplierPdf: await readSample(PAIRS.granot.tr),
-      trFileName: "a.pdf",
+      ownPdf: await readSample(PAIRS.granot.supplier),
+      supplierPdf: await readSample(PAIRS.granot.own),
+      ownFileName: "a.pdf",
       supplierFileName: "b.pdf",
-    });
+    }, TEENA_RIMON);
     await expect(promise).rejects.toBeInstanceOf(ExtractionError);
     await expect(promise).rejects.toThrow("הוחלפו");
   });
 
   it("warns when the draft was issued against a different supplier invoice", async () => {
     const result = await extractInvoices({
-      trPdf: await readSample(PAIRS.shivuk.tr),
+      ownPdf: await readSample(PAIRS.shivuk.own),
       supplierPdf: await readSample(PAIRS.granot.supplier),
-      trFileName: "a.pdf",
+      ownFileName: "a.pdf",
       supplierFileName: "b.pdf",
-    });
-    expect(result.teenaRimon.warnings.join()).toContain("כנגד חשבונית");
+    }, TEENA_RIMON);
+    expect(result.own.warnings.join()).toContain("כנגד חשבונית");
   });
 });

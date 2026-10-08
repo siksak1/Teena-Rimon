@@ -115,7 +115,7 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     אא: "א",
     "א א": "א",
     מובחר: "א",
-    // Galil's market tiers (Teena-Rimon abbreviates "שוק מו")
+    // Galil's market tiers (the wholesaler's draft abbreviates "שוק מו")
     "שוק מוסדי": "מוסדי",
     "שוק מו": "מוסדי",
     מוסדי: "מוסדי",
@@ -123,7 +123,7 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     יצוא: "יצוא",
   },
   sizes: {
-    // Shivuk prints "סברס M" where Teena-Rimon writes "סברס קטן".
+    // Shivuk prints "סברס M" where the wholesaler's draft writes "סברס קטן".
     M: "S",
     קטן: "S",
     S: "S",
@@ -163,3 +163,19 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     "דרך הפלחה",
   ],
 };
+
+/** The shared dictionary plus a customer's own entries (customer entries win on conflicts). */
+export function extendDictionary(
+  base: NameDictionary,
+  extension: Partial<NameDictionary> = {},
+): NameDictionary {
+  return {
+    families: [...new Set([...base.families, ...(extension.families ?? [])])],
+    familyAliases: { ...base.familyAliases, ...extension.familyAliases },
+    cultivars: { ...base.cultivars, ...extension.cultivars },
+    colors: { ...base.colors, ...extension.colors },
+    grades: { ...base.grades, ...extension.grades },
+    sizes: { ...base.sizes, ...extension.sizes },
+    noise: [...new Set([...base.noise, ...(extension.noise ?? [])])],
+  };
+}

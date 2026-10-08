@@ -10,7 +10,7 @@ export type SupplierLine = {
   date: string | null;
   /** Supplier delivery document, e.g. "SH2610231" / "2SH2605495". */
   docNumber: string | null;
-  /** Booklet reference ("תעודה מפנקס" / "מספר פנקס"); often what Teena-Rimon records. */
+  /** Booklet reference ("תעודה מפנקס" / "מספר פנקס"); often what the wholesaler records. */
   bookRef: string | null;
   description: string;
   /** Variety column (Granot "זן"); empty when the supplier has none. */
@@ -37,14 +37,17 @@ export type SupplierInvoice = {
   warnings: string[];
 };
 
-/** One row on Teena-Rimon's AGROLINE draft ("חשבונית טיוטה"). */
-export type TrLine = {
+/**
+ * One row on the wholesaler's own document — the side every supplier invoice
+ * is checked against (Teena-Rimon: the AGROLINE draft, "חשבונית טיוטה").
+ */
+export type OwnLine = {
   id: string;
   page: number;
   date: string | null;
-  /** Teena-Rimon's own document number, e.g. "23134". */
-  trDocNumber: string;
-  /** The supplier reference Teena-Rimon typed in (book ref or SH digits). */
+  /** The wholesaler's own document number, e.g. "23134". */
+  ownDocNumber: string;
+  /** The supplier reference the wholesaler's clerk typed in (book ref or SH digits). */
   supplierRef: string;
   product: string;
   size: string;
@@ -56,11 +59,11 @@ export type TrLine = {
   lineTotal: number;
 };
 
-export type TrInvoice = {
-  draftNumber: string;
-  /** Supplier invoice number this draft is issued against ("כנגד חשבונית"). */
+export type OwnInvoice = {
+  documentNumber: string;
+  /** Supplier invoice number this document is issued against ("כנגד חשבונית"). */
   againstInvoice: string | null;
-  lines: TrLine[];
+  lines: OwnLine[];
   printedGrossTotal: number | null;
   commercialDiscount: number;
   /** commercialDiscount / gross, e.g. 0.12. */
@@ -70,9 +73,9 @@ export type TrInvoice = {
 
 export type ExtractionResult = {
   supplier: SupplierInvoice;
-  teenaRimon: TrInvoice;
+  own: OwnInvoice;
   meta: {
-    trFileName: string;
+    ownFileName: string;
     supplierFileName: string;
   };
 };
@@ -93,15 +96,15 @@ export type GapFlag =
 export type MatchGroup = {
   id: string;
   supplierLines: SupplierLine[];
-  trLines: TrLine[];
-  /** Supplier net is printed; TR net = gross × (1 − TR discount). */
+  ownLines: OwnLine[];
+  /** Supplier net is printed; own net = gross × (1 − own discount). */
   supplierNet: number;
-  trNet: number;
-  /** trNet − supplierNet */
+  ownNet: number;
+  /** ownNet − supplierNet */
   netDiff: number;
   quantityDiff: number;
   packagesDiff: number | null;
-  /** TR date minus supplier date, in days. */
+  /** Own date minus supplier date, in days. */
   dateDelta: number | null;
   flags: GapFlag[];
   /** Human-readable (Hebrew) reasons, one per detected gap. */
@@ -112,7 +115,7 @@ export type MatchGroup = {
 export type ReconciliationResult = {
   groups: MatchGroup[];
   supplierOnly: SupplierLine[];
-  trOnly: TrLine[];
+  ownOnly: OwnLine[];
   offset: {
     /** True when net item totals are equal, so price/quantity gaps cancel out. */
     applies: boolean;
@@ -120,10 +123,10 @@ export type ReconciliationResult = {
   };
   totals: {
     supplierNet: number;
-    trGross: number;
-    trDiscountPct: number;
-    trNet: number;
-    /** trNet − supplierNet */
+    ownGross: number;
+    ownDiscountPct: number;
+    ownNet: number;
+    /** ownNet − supplierNet */
     diff: number;
   };
   warnings: string[];

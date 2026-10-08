@@ -1,5 +1,5 @@
 import { ExtractionError } from "../errors.js";
-import type { TrInvoice, TrLine } from "../model.js";
+import type { OwnInvoice, OwnLine } from "../model.js";
 import {
   cellText,
   columnsFromHeader,
@@ -10,6 +10,7 @@ import {
   type Row,
 } from "../pdf/layout.js";
 import { parseDate, parseNumber, round2 } from "../pdf/text.js";
+import type { OwnDocumentParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
 type Key =
@@ -36,20 +37,24 @@ const COLUMNS: ColumnSpec<Key>[] = [
 ];
 
 /**
- * Some suppliers (e.g. D. Hai) also print from AGROLINE, so only the draft
- * title identifies Teena-Rimon's side.
+ * A wholesaler's AGROLINE draft ("חשבונית טיוטה") — the same layout for every
+ * supplier (Teena-Rimon's own document). Amounts are before the commercial
+ * discount, which is printed once in the footer ("הנחה מסחרית").
  */
-export function isTeenaRimonDraft(doc: PdfDocument): boolean {
-  return doc.text.includes("חשבונית טיוטה");
-}
+export const agrolineDraftParser: OwnDocumentParser = {
+  id: "agroline-draft",
 
-/**
- * Teena-Rimon's AGROLINE draft ("חשבונית טיוטה") — the same layout for every
- * supplier. Amounts are before the commercial discount, which is printed
- * once in the footer ("הנחה מסחרית").
- */
-export function parseTeenaRimon(doc: PdfDocument): TrInvoice {
-  const lines: TrLine[] = [];
+  // Some suppliers (e.g. D. Hai) also print from AGROLINE, so only the draft
+  // title identifies the wholesaler's side.
+  detect(doc) {
+    return doc.text.includes("חשבונית טיוטה");
+  },
+
+  parse: parseAgrolineDraft,
+};
+
+function parseAgrolineDraft(doc: PdfDocument, customerName: string): OwnInvoice {
+  const lines: OwnLine[] = [];
   const warnings: string[] = [];
 
   for (const rows of doc.pages) {
@@ -65,14 +70,14 @@ export function parseTeenaRimon(doc: PdfDocument): TrInvoice {
       const quantity = parseNumber(cellText(c.quantity));
       if (!date || total == null || quantity == null) continue;
 
-      // Two numbers sit under "אסמכתא": Teena-Rimon's doc (right) and the
+      // Two numbers sit under "אסמכתא": the wholesaler's doc (right) and the
       // supplier reference typed in by the clerk (left).
       const refs = [...c.ref].sort((a, b) => b.x - a.x).map((cell) => cell.text);
       lines.push({
         id: `T${lines.length + 1}`,
         page: row.page,
         date,
-        trDocNumber: refs[0] ?? "",
+        ownDocNumber: refs[0] ?? "",
         supplierRef: refs[1] ?? "",
         product: cellText(c.product),
         size: cellText(c.size),
@@ -86,18 +91,18 @@ export function parseTeenaRimon(doc: PdfDocument): TrInvoice {
   }
 
   if (lines.length === 0) {
-    throw new ExtractionError("לא נמצאו שורות בחשבונית הטיוטה של תאנה ורימון");
+    throw new ExtractionError(`לא נמצאו שורות בחשבונית הטיוטה של ${customerName}`);
   }
 
   const gross = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
   const printedGrossTotal = footerAmount(doc, "עבור תקופה");
-  checkTotal("חשבונית תאנה ורימון", gross, printedGrossTotal, warnings);
+  checkTotal(`חשבונית ${customerName}`, gross, printedGrossTotal, warnings);
 
   const commercialDiscount = footerAmount(doc, "הנחה מסחרית") ?? 0;
-  if (!commercialDiscount) warnings.push('לא נמצאה "הנחה מסחרית" בחשבונית תאנה ורימון — ההשוואה מניחה 0%');
+  if (!commercialDiscount) warnings.push(`לא נמצאה "הנחה מסחרית" בחשבונית ${customerName} — ההשוואה מניחה 0%`);
 
   return {
-    draftNumber: doc.text.match(/חשבונית טיוטה\s+(\d+)/)?.[1] ?? "",
+    documentNumber: doc.text.match(/חשבונית טיוטה\s+(\d+)/)?.[1] ?? "",
     againstInvoice: doc.text.match(/כנגד חשבונית\s+(\d+)/)?.[1] ?? null,
     lines,
     printedGrossTotal,

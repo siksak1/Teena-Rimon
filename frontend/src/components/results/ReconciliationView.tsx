@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
+import customer from "@customer-config";
 import { money, percent, signedMoney } from "./format";
-import { SupplierOnlyTable, TrOnlyTable } from "./LineTables";
+import { OwnOnlyTable, SupplierOnlyTable } from "./LineTables";
 import { MatchedGroupsTable } from "./MatchedGroupsTable";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export function ReconciliationView({ extraction, result }: Props) {
+  const ownName = customer.displayName;
   const [hideClean, setHideClean] = useState(false);
   const { totals, offset } = result;
   const offsetIds = new Set(offset.groups.map((g) => g.id));
@@ -29,8 +31,8 @@ export function ReconciliationView({ extraction, result }: Props) {
           {extraction.supplier.supplierName} · חשבונית {extraction.supplier.invoiceNumber}
         </h2>
         <p className="results__meta">
-          מול טיוטת תאנה ורימון {extraction.teenaRimon.draftNumber}
-          {extraction.teenaRimon.againstInvoice && ` (כנגד חשבונית ${extraction.teenaRimon.againstInvoice})`}
+          מול חשבונית {ownName} {extraction.own.documentNumber}
+          {extraction.own.againstInvoice && ` (כנגד חשבונית ${extraction.own.againstInvoice})`}
         </p>
       </header>
 
@@ -41,12 +43,12 @@ export function ReconciliationView({ extraction, result }: Props) {
         </div>
         <div className="total-card">
           <span>
-            תאנה ורימון — {money(totals.trGross)} פחות הנחה {percent(totals.trDiscountPct)}
+            {ownName} — {money(totals.ownGross)} פחות הנחה {percent(totals.ownDiscountPct)}
           </span>
-          <strong>{money(totals.trNet)}</strong>
+          <strong>{money(totals.ownNet)}</strong>
         </div>
         <div className={`total-card ${isBalanced ? "total-card--ok" : "total-card--hot"}`}>
-          <span>פער (תאנה ורימון פחות ספק)</span>
+          <span>פער ({ownName} פחות ספק)</span>
           <strong>{signedMoney(totals.diff)}</strong>
         </div>
       </div>
@@ -55,7 +57,7 @@ export function ReconciliationView({ extraction, result }: Props) {
         <span role="listitem">קבוצות שהוצמדו: <strong>{result.groups.length}</strong></span>
         <span role="listitem">עם פערים: <strong>{withGaps}</strong></span>
         <span role="listitem">רק אצל הספק: <strong>{result.supplierOnly.length}</strong></span>
-        <span role="listitem">רק אצל תאנה ורימון: <strong>{result.trOnly.length}</strong></span>
+        <span role="listitem">רק אצל {ownName}: <strong>{result.ownOnly.length}</strong></span>
       </div>
 
       {result.warnings.length > 0 && (
@@ -78,9 +80,9 @@ export function ReconciliationView({ extraction, result }: Props) {
           </label>
         </div>
         <p className="section-hint">
-          הסה"כ נטו של תאנה ורימון מחושב אחרי הנחה מסחרית של {percent(totals.trDiscountPct)}. בשורת הסיכום של כל קבוצה: הפרש אריזות, ק"ג, ימים וכסף.
+          הסה"כ נטו של {ownName} מחושב אחרי הנחה מסחרית של {percent(totals.ownDiscountPct)}. בשורת הסיכום של כל קבוצה: הפרש אריזות, ק"ג, ימים וכסף.
         </p>
-        <MatchedGroupsTable groups={mainGroups} trDiscountPct={totals.trDiscountPct} />
+        <MatchedGroupsTable groups={mainGroups} ownDiscountPct={totals.ownDiscountPct} />
       </section>
 
       <section className="results__section">
@@ -93,11 +95,11 @@ export function ReconciliationView({ extraction, result }: Props) {
       </section>
 
       <section className="results__section">
-        <h3>רק אצל תאנה ורימון ({result.trOnly.length})</h3>
-        {result.trOnly.length ? (
-          <TrOnlyTable lines={result.trOnly} />
+        <h3>רק אצל {ownName} ({result.ownOnly.length})</h3>
+        {result.ownOnly.length ? (
+          <OwnOnlyTable lines={result.ownOnly} />
         ) : (
-          <p className="empty">כל שורות תאנה ורימון הוצמדו.</p>
+          <p className="empty">כל שורות {ownName} הוצמדו.</p>
         )}
       </section>
 
@@ -109,7 +111,7 @@ export function ReconciliationView({ extraction, result }: Props) {
               <p className="section-hint">
                 סה"כ החשבוניות זהה, ולכן פערי המחיר והמשקל בקבוצות הבאות מתקזזים זה בזה (סכום הפערים: {signedMoney(offset.groups.reduce((a, g) => a + g.netDiff, 0))}).
               </p>
-              <MatchedGroupsTable groups={offset.groups} trDiscountPct={totals.trDiscountPct} tone="offset" />
+              <MatchedGroupsTable groups={offset.groups} ownDiscountPct={totals.ownDiscountPct} tone="offset" />
             </>
           ) : (
             <p className="empty">סה"כ החשבוניות זהה ואין פערים לקיזוז.</p>

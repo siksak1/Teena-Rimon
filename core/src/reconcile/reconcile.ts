@@ -1,71 +1,78 @@
+import type { CustomerConfig } from "../customer.js";
 import type { ExtractionResult, GapFlag, MatchGroup, ReconciliationResult } from "../model.js";
 import { round2 } from "../pdf/text.js";
 import { describeGroup } from "./diffs.js";
 import { pairDocuments } from "./docPairing.js";
 import { matchGroups, type Candidate } from "./groupMatching.js";
+import { DEFAULT_DICTIONARY, extendDictionary } from "./names/dictionary.js";
 import { NameMatcher } from "./names/NameMatcher.js";
 import { prepare } from "./prepare.js";
 
-/** Net item totals within this many shekels count as equal (rounding). */
-const OFFSET_TOLERANCE = 1;
 /** Gaps that may cancel each other out across the invoice. */
 const OFFSETTABLE: GapFlag[] = ["quantity", "price", "packages"];
 
+/** The shared product dictionary plus the customer's own entries. */
+export function matcherFor(config: CustomerConfig): NameMatcher {
+  return new NameMatcher(extendDictionary(DEFAULT_DICTIONARY, config.dictionary));
+}
+
 /**
- * Deterministic reconciliation of a supplier invoice against Teena-Rimon's
- * draft. Pure function — runs in the browser or in Node.
+ * Deterministic reconciliation of a supplier invoice against the wholesaler's
+ * own document. Pure function — runs in the browser or in Node.
  */
 export function reconcile(
   extraction: ExtractionResult,
-  matcher: NameMatcher = new NameMatcher(),
+  config: CustomerConfig,
+  matcher: NameMatcher = matcherFor(config),
 ): ReconciliationResult {
-  const { supplier, tr } = prepare(extraction, matcher);
-  const trDiscountPct = extraction.teenaRimon.discountPct;
+  const tol = config.tolerances;
+  const { supplier, own } = prepare(extraction, matcher, config);
+  const ownDiscountPct = extraction.own.discountPct;
 
   // 1. Pair delivery documents, 2. match rows inside each pair.
-  const { scopes, unpairedSupplier, unpairedTr } = pairDocuments(supplier, tr);
+  const { scopes, unpairedSupplier, unpairedOwn } = pairDocuments(supplier, own, tol);
   const candidates: Candidate[] = [];
   const leftoverS = [...unpairedSupplier];
-  const leftoverT = [...unpairedTr];
+  const leftoverT = [...unpairedOwn];
   for (const scope of scopes) {
-    const r = matchGroups(scope.supplier, scope.tr, matcher, { absorbLeftovers: true });
+    const r = matchGroups(scope.supplier, scope.own, matcher, tol, { absorbLeftovers: true });
     candidates.push(...r.groups);
     leftoverS.push(...r.leftoverSupplier);
-    leftoverT.push(...r.leftoverTr);
+    leftoverT.push(...r.leftoverOwn);
   }
 
-  // 3. Leftover pass: rows still unmatched, across documents (±2 days; unrelated names need equal numbers).
-  const last = matchGroups(leftoverS, leftoverT, matcher, { strictUnrelatedNames: true });
+  // 3. Leftover pass: rows still unmatched, across documents (within the date window; unrelated names need equal numbers).
+  const last = matchGroups(leftoverS, leftoverT, matcher, tol, { strictUnrelatedNames: true });
   candidates.push(...last.groups);
 
   const groups = candidates
-    .map((c) => describeGroup("", c, trDiscountPct, matcher))
+    .map((c) => describeGroup("", c, ownDiscountPct, matcher, config.displayName))
     .sort(bySeverity)
     .map((g, i) => ({ ...g, id: `G${i + 1}` }));
 
   // 4. Invoice totals and offsetting.
   const supplierNet = round2(supplier.reduce((a, x) => a + x.line.lineTotal, 0));
-  const trGross = round2(tr.reduce((a, x) => a + x.line.lineTotal, 0));
-  const discount = extraction.teenaRimon.commercialDiscount || trGross * trDiscountPct;
-  const trNet = round2(trGross - discount);
-  const diff = round2(trNet - supplierNet);
-  const applies = Math.abs(diff) <= OFFSET_TOLERANCE;
+  const ownGross = round2(own.reduce((a, x) => a + x.line.lineTotal, 0));
+  const discount = extraction.own.commercialDiscount || ownGross * ownDiscountPct;
+  const ownNet = round2(ownGross - discount);
+  const diff = round2(ownNet - supplierNet);
+  const applies = config.offsetting === "invoice-wide" && Math.abs(diff) <= tol.offsetToleranceNis;
   const offsetGroups = applies
     ? groups.filter((g) => g.netDiff !== 0 && g.flags.length > 0 && g.flags.every((f) => OFFSETTABLE.includes(f)))
     : [];
 
   const matchedNames = groups.flatMap((g) => [
     ...g.supplierLines.map((l) => matcher.parse(l.description, l.variety)),
-    ...g.trLines.map((l) => matcher.parse(l.product, l.size)),
+    ...g.ownLines.map((l) => matcher.parse(l.product, l.size)),
   ]);
 
   return {
     groups,
     supplierOnly: last.leftoverSupplier.map((x) => x.line).sort(byId),
-    trOnly: last.leftoverTr.map((x) => x.line).sort(byId),
+    ownOnly: last.leftoverOwn.map((x) => x.line).sort(byId),
     offset: { applies, groups: offsetGroups },
-    totals: { supplierNet, trGross, trDiscountPct, trNet, diff },
-    warnings: [...extraction.supplier.warnings, ...extraction.teenaRimon.warnings],
+    totals: { supplierNet, ownGross, ownDiscountPct, ownNet, diff },
+    warnings: [...extraction.supplier.warnings, ...extraction.own.warnings],
     dictionarySuggestions: [...new Set(matchedNames.flatMap((n) => n.unknown))].sort(),
   };
 }

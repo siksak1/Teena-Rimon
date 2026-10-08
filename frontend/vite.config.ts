@@ -26,8 +26,12 @@ export default defineConfig({
     __APP_COMMIT__: JSON.stringify(gitCommit()),
   },
   resolve: {
-    // Shared parsing + reconciliation engine.
-    alias: { "@core": fileURLToPath(new URL("../core/src", import.meta.url)) },
+    alias: {
+      // Shared parsing + reconciliation engine.
+      "@core": fileURLToPath(new URL("../core/src", import.meta.url)),
+      // The customer this build is for; only its config is bundled.
+      "@customer-config": fileURLToPath(new URL("../customers/teena-rimon/config.json", import.meta.url)),
+    },
   },
   server: {
     host: "0.0.0.0",

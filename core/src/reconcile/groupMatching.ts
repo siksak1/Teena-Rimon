@@ -1,15 +1,10 @@
-import { daysBetween, withinDateTolerance } from "./dates.js";
+import type { Tolerances } from "../customer.js";
+import { daysBetween, withinDays } from "./dates.js";
 import type { NameMatcher } from "./names/NameMatcher.js";
-import type { SLine, TLine } from "./prepare.js";
+import type { SLine, OLine } from "./prepare.js";
 
-export type Candidate = { s: SLine[]; t: TLine[]; score: number };
+export type Candidate = { s: SLine[]; t: OLine[]; score: number };
 
-/** Largest number of rows on the "many" side of a group (1:k or k:1). */
-const MAX_GROUP_SIZE = 4;
-/** A pair is rejected only when BOTH weight and price differ by more than this. */
-const REJECT_RELATIVE_DIFF = 0.05;
-/** Multi-row groups must add up to the same weight within this many kg. */
-const SUM_TOLERANCE_KG = 1;
 /** Safety net for the exhaustive search; beyond it the best found so far is used. */
 const SEARCH_NODE_LIMIT = 200_000;
 
@@ -18,7 +13,8 @@ const WEIGHTS = { name: 0.2, quantity: 0.35, price: 0.25, packages: 0.1, date: 0
 export type MatchOptions = {
   /**
    * Across documents there is no reference to lean on: a pair whose names
-   * cannot be related must then agree on both weight and price (±5%).
+   * cannot be related must then agree on both weight and price (within
+   * `rejectRelativeDiff`).
    */
   strictUnrelatedNames?: boolean;
   /**
@@ -30,56 +26,63 @@ export type MatchOptions = {
 };
 
 /**
- * Match supplier rows to Teena-Rimon rows inside one scope. Names are a soft
+ * Match supplier rows to own-document rows inside one scope. Names are a soft
  * signal: any pair is a candidate unless both names are known, different
  * products. Groups are 1:1, or 1:k / k:1 within one product family. The
  * chosen set covers as many rows as possible, then maximises the total score.
  */
 export function matchGroups(
   supplier: SLine[],
-  tr: TLine[],
+  own: OLine[],
   matcher: NameMatcher,
+  tolerances: Tolerances,
   options: MatchOptions = {},
-): { groups: Candidate[]; leftoverSupplier: SLine[]; leftoverTr: TLine[] } {
+): { groups: Candidate[]; leftoverSupplier: SLine[]; leftoverOwn: OLine[] } {
   const groups: Candidate[] = [];
-  for (const component of components(candidatesFor(supplier, tr, matcher, options))) {
+  for (const component of components(candidatesFor(supplier, own, matcher, tolerances, options))) {
     groups.push(...selectGroups(component.s, component.t, component.candidates));
   }
-  if (options.absorbLeftovers) absorbLeftovers(groups, supplier, tr, matcher);
+  if (options.absorbLeftovers) absorbLeftovers(groups, supplier, own, matcher, tolerances);
 
   const usedS = new Set(groups.flatMap((g) => g.s));
   const usedT = new Set(groups.flatMap((g) => g.t));
   return {
     groups,
     leftoverSupplier: supplier.filter((x) => !usedS.has(x)),
-    leftoverTr: tr.filter((x) => !usedT.has(x)),
+    leftoverOwn: own.filter((x) => !usedT.has(x)),
   };
 }
 
-function candidatesFor(s: SLine[], t: TLine[], matcher: NameMatcher, options: MatchOptions): Candidate[] {
+function candidatesFor(
+  s: SLine[],
+  t: OLine[],
+  matcher: NameMatcher,
+  tol: Tolerances,
+  options: MatchOptions,
+): Candidate[] {
   const out: Candidate[] = [];
-  const add = (sGroup: SLine[], tGroup: TLine[]) => {
-    if (!sGroup.every((a) => tGroup.every((b) => withinDateTolerance(a.line.date, b.line.date)))) return;
+  const add = (sGroup: SLine[], tGroup: OLine[]) => {
+    if (!sGroup.every((a) => tGroup.every((b) => withinDays(a.line.date, b.line.date, tol.dateWindowDays)))) return;
     const multi = sGroup.length > 1 || tGroup.length > 1;
-    if (multi ? !sumsAgree(sGroup, tGroup) : rejectPair(sGroup[0], tGroup[0])) return;
-    out.push({ s: sGroup, t: tGroup, score: scoreGroup(sGroup, tGroup, matcher) });
+    if (multi ? !sumsAgree(sGroup, tGroup, tol) : rejectPair(sGroup[0], tGroup[0], tol)) return;
+    out.push({ s: sGroup, t: tGroup, score: scoreGroup(sGroup, tGroup, matcher, tol) });
   };
 
   for (const a of s) {
     for (const b of t) {
       const name = matcher.compare(a.name, b.name);
       if (!name.compatible) continue;
-      if (options.strictUnrelatedNames && !name.sameFamily && !numbersAgree(a, b)) continue;
+      if (options.strictUnrelatedNames && !name.sameFamily && !numbersAgree(a, b, tol)) continue;
       add([a], [b]);
     }
   }
   // Splits only within one family: summing unrelated rows finds coincidences.
-  const sameFamily = (x: SLine | TLine, y: SLine | TLine) => matcher.compare(x.name, y.name).sameFamily;
+  const sameFamily = (x: SLine | OLine, y: SLine | OLine) => matcher.compare(x.name, y.name).sameFamily;
   for (const a of s) {
-    for (const subset of subsets(t.filter((b) => sameFamily(a, b)), 2, MAX_GROUP_SIZE)) add([a], subset);
+    for (const subset of subsets(t.filter((b) => sameFamily(a, b)), 2, tol.maxGroupSize)) add([a], subset);
   }
   for (const b of t) {
-    for (const subset of subsets(s.filter((a) => sameFamily(a, b)), 2, MAX_GROUP_SIZE)) add(subset, [b]);
+    for (const subset of subsets(s.filter((a) => sameFamily(a, b)), 2, tol.maxGroupSize)) add(subset, [b]);
   }
   return out.sort((x, y) => y.score - x.score);
 }
@@ -88,9 +91,9 @@ function candidatesFor(s: SLine[], t: TLine[], matcher: NameMatcher, options: Ma
  * Split candidates into independent sets (no shared rows between sets), so
  * the exhaustive search runs on small problems.
  */
-function components(candidates: Candidate[]): { s: SLine[]; t: TLine[]; candidates: Candidate[] }[] {
-  const parent = new Map<SLine | TLine, SLine | TLine>();
-  const find = (x: SLine | TLine): SLine | TLine => {
+function components(candidates: Candidate[]): { s: SLine[]; t: OLine[]; candidates: Candidate[] }[] {
+  const parent = new Map<SLine | OLine, SLine | OLine>();
+  const find = (x: SLine | OLine): SLine | OLine => {
     const p = parent.get(x) ?? x;
     if (p === x) return x;
     const root = find(p);
@@ -101,7 +104,7 @@ function components(candidates: Candidate[]): { s: SLine[]; t: TLine[]; candidat
     const [first, ...rest] = [...c.s, ...c.t];
     for (const x of rest) parent.set(find(x), find(first));
   }
-  const byRoot = new Map<SLine | TLine, { s: Set<SLine>; t: Set<TLine>; candidates: Candidate[] }>();
+  const byRoot = new Map<SLine | OLine, { s: Set<SLine>; t: Set<OLine>; candidates: Candidate[] }>();
   for (const c of candidates) {
     const root = find(c.s[0]);
     let entry = byRoot.get(root);
@@ -123,23 +126,29 @@ function components(candidates: Candidate[]): { s: SLine[]; t: TLine[]; candidat
  *    best-named rows open a new group.
  * Mutates `groups`.
  */
-function absorbLeftovers(groups: Candidate[], supplier: SLine[], tr: TLine[], matcher: NameMatcher): void {
-  const used = new Set<SLine | TLine>(groups.flatMap((g) => [...g.s, ...g.t]));
-  const nameScore = (x: SLine | TLine, others: (SLine | TLine)[]) => {
+function absorbLeftovers(
+  groups: Candidate[],
+  supplier: SLine[],
+  own: OLine[],
+  matcher: NameMatcher,
+  tol: Tolerances,
+): void {
+  const used = new Set<SLine | OLine>(groups.flatMap((g) => [...g.s, ...g.t]));
+  const nameScore = (x: SLine | OLine, others: (SLine | OLine)[]) => {
     const scores = others.map((o) => matcher.compare(x.name, o.name));
     if (scores.length === 0 || !scores.every((c) => c.sameFamily)) return -1;
     return Math.max(...scores.map((c) => c.score));
   };
-  const datesOk = (x: SLine | TLine, others: (SLine | TLine)[]) =>
-    others.every((o) => withinDateTolerance(x.line.date, o.line.date));
-  const kg = (rows: (SLine | TLine)[]) => sumOf(rows, (r) => r.line.quantity);
+  const datesOk = (x: SLine | OLine, others: (SLine | OLine)[]) =>
+    others.every((o) => withinDays(x.line.date, o.line.date, tol.dateWindowDays));
+  const kg = (rows: (SLine | OLine)[]) => sumOf(rows, (r) => r.line.quantity);
 
   let changed = true;
   while (changed) {
     changed = false;
     const leftovers = [
-      ...supplier.filter((x) => !used.has(x)).map((x) => ({ row: x as SLine | TLine, side: "s" as const })),
-      ...tr.filter((x) => !used.has(x)).map((x) => ({ row: x as SLine | TLine, side: "t" as const })),
+      ...supplier.filter((x) => !used.has(x)).map((x) => ({ row: x as SLine | OLine, side: "s" as const })),
+      ...own.filter((x) => !used.has(x)).map((x) => ({ row: x as SLine | OLine, side: "t" as const })),
     ].sort((a, b) => b.row.line.quantity - a.row.line.quantity);
 
     for (const { row, side } of leftovers) {
@@ -161,23 +170,23 @@ function absorbLeftovers(groups: Candidate[], supplier: SLine[], tr: TLine[], ma
       }
       if (best) {
         if (side === "s") best.group.s.push(row as SLine);
-        else best.group.t.push(row as TLine);
-        best.group.score = scoreGroup(best.group.s, best.group.t, matcher);
+        else best.group.t.push(row as OLine);
+        best.group.score = scoreGroup(best.group.s, best.group.t, matcher, tol);
         used.add(row);
         changed = true;
         break;
       }
 
       // 2. Open a group with the best-named leftover on the other side.
-      const pool = (side === "s" ? tr : supplier).filter((x) => !used.has(x) && datesOk(row, [x]));
+      const pool = (side === "s" ? own : supplier).filter((x) => !used.has(x) && datesOk(row, [x]));
       const partner = pool
         .map((x) => ({ x, name: nameScore(row, [x]) }))
         .filter((c) => c.name >= 0)
         .sort((a, b) => b.name - a.name)[0];
       if (partner) {
         const sRows = [side === "s" ? row : partner.x] as SLine[];
-        const tRows = [side === "t" ? row : partner.x] as TLine[];
-        groups.push({ s: sRows, t: tRows, score: scoreGroup(sRows, tRows, matcher) });
+        const tRows = [side === "t" ? row : partner.x] as OLine[];
+        groups.push({ s: sRows, t: tRows, score: scoreGroup(sRows, tRows, matcher, tol) });
         used.add(row);
         used.add(partner.x);
         changed = true;
@@ -187,25 +196,25 @@ function absorbLeftovers(groups: Candidate[], supplier: SLine[], tr: TLine[], ma
   }
 }
 
-/** Weight and price both within the 5% threshold. */
-function numbersAgree(s: SLine, t: TLine): boolean {
+/** Weight and price both within the rejection threshold. */
+function numbersAgree(s: SLine, t: OLine, tol: Tolerances): boolean {
   return (
-    relDiff(s.line.quantity, t.line.quantity) <= REJECT_RELATIVE_DIFF &&
-    relDiff(s.line.unitPrice, t.line.unitPrice) <= REJECT_RELATIVE_DIFF
+    relDiff(s.line.quantity, t.line.quantity) <= tol.rejectRelativeDiff &&
+    relDiff(s.line.unitPrice, t.line.unitPrice) <= tol.rejectRelativeDiff
   );
 }
 
-/** Same item even with big gaps — unless weight AND price are both off by >5%. */
-function rejectPair(s: SLine, t: TLine): boolean {
+/** Same item even with big gaps — unless weight AND price are both beyond the threshold. */
+function rejectPair(s: SLine, t: OLine, tol: Tolerances): boolean {
   return (
-    relDiff(s.line.quantity, t.line.quantity) > REJECT_RELATIVE_DIFF &&
-    relDiff(s.line.unitPrice, t.line.unitPrice) > REJECT_RELATIVE_DIFF
+    relDiff(s.line.quantity, t.line.quantity) > tol.rejectRelativeDiff &&
+    relDiff(s.line.unitPrice, t.line.unitPrice) > tol.rejectRelativeDiff
   );
 }
 
 /** Multi-row groups need matching weight sums, plus equal packages or equal prices. */
-function sumsAgree(s: SLine[], t: TLine[]): boolean {
-  if (Math.abs(sumOf(s, (x) => x.line.quantity) - sumOf(t, (x) => x.line.quantity)) > SUM_TOLERANCE_KG) {
+function sumsAgree(s: SLine[], t: OLine[], tol: Tolerances): boolean {
+  if (Math.abs(sumOf(s, (x) => x.line.quantity) - sumOf(t, (x) => x.line.quantity)) > tol.sumToleranceKg) {
     return false;
   }
   const sPk = packagesSum(s);
@@ -215,13 +224,13 @@ function sumsAgree(s: SLine[], t: TLine[]): boolean {
   return prices.size === 1;
 }
 
-function scoreGroup(s: SLine[], t: TLine[], matcher: NameMatcher): number {
+function scoreGroup(s: SLine[], t: OLine[], matcher: NameMatcher, tol: Tolerances): number {
   let nameTotal = 0;
   for (const a of s) for (const b of t) nameTotal += matcher.compare(a.name, b.name).score;
   const name = nameTotal / (s.length * t.length);
 
-  const quantity = closeness(relDiff(sumOf(s, (x) => x.line.quantity), sumOf(t, (x) => x.line.quantity)));
-  const price = closeness(relDiff(weightedPrice(s), weightedPrice(t)));
+  const quantity = closeness(relDiff(sumOf(s, (x) => x.line.quantity), sumOf(t, (x) => x.line.quantity)), tol);
+  const price = closeness(relDiff(weightedPrice(s), weightedPrice(t)), tol);
 
   const sPk = packagesSum(s);
   const tPk = packagesSum(t);
@@ -252,7 +261,7 @@ function scoreGroup(s: SLine[], t: TLine[], matcher: NameMatcher): number {
  * Exhaustive branch-and-bound over the supplier rows (families inside a
  * document are small); the objective weights coverage far above score.
  */
-function selectGroups(s: SLine[], t: TLine[], candidates: Candidate[]): Candidate[] {
+function selectGroups(s: SLine[], t: OLine[], candidates: Candidate[]): Candidate[] {
   const sIndex = new Map(s.map((x, i) => [x, i]));
   const tIndex = new Map(t.map((x, i) => [x, i]));
   // Each candidate is tried when the search reaches its first supplier row.
@@ -317,21 +326,21 @@ export function relDiff(a: number, b: number): number {
   return base === 0 ? 0 : Math.abs(a - b) / base;
 }
 
-/** 1 at equality, falling linearly to 0 at the 5% rejection threshold. */
-function closeness(rel: number): number {
-  return Math.max(0, 1 - rel / REJECT_RELATIVE_DIFF);
+/** 1 at equality, falling linearly to 0 at the rejection threshold. */
+function closeness(rel: number, tol: Tolerances): number {
+  return Math.max(0, 1 - rel / tol.rejectRelativeDiff);
 }
 
 function sumOf<T>(items: T[], f: (x: T) => number): number {
   return items.reduce((acc, x) => acc + f(x), 0);
 }
 
-function packagesSum(items: (SLine | TLine)[]): number | null {
+function packagesSum(items: (SLine | OLine)[]): number | null {
   if (items.some((x) => x.line.packages == null)) return null;
   return sumOf(items, (x) => x.line.packages ?? 0);
 }
 
-function weightedPrice(items: (SLine | TLine)[]): number {
+function weightedPrice(items: (SLine | OLine)[]): number {
   const kg = sumOf(items, (x) => x.line.quantity);
   return kg ? sumOf(items, (x) => x.line.quantity * x.line.unitPrice) / kg : 0;
 }

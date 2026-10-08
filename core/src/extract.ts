@@ -1,13 +1,19 @@
 import { ExtractionError } from "./errors.js";
+import type { CustomerConfig } from "./customer.js";
 import type { ExtractionResult } from "./model.js";
 import { loadPdf } from "./pdf/layout.js";
-import { detectSupplier, SUPPLIER_PARSERS, UNSUPPORTED_SUPPLIERS } from "./parsers/registry.js";
-import { isTeenaRimonDraft, parseTeenaRimon } from "./parsers/teenaRimon.js";
+import {
+  detectSupplier,
+  ownDocumentParser,
+  SUPPLIER_PARSERS,
+  UNSUPPORTED_SUPPLIERS,
+} from "./parsers/registry.js";
 
 export type ExtractInput = {
-  trPdf: Uint8Array;
+  /** The wholesaler's own document (Teena-Rimon: the AGROLINE draft). */
+  ownPdf: Uint8Array;
   supplierPdf: Uint8Array;
-  trFileName: string;
+  ownFileName: string;
   supplierFileName: string;
 };
 
@@ -15,21 +21,25 @@ export type ExtractInput = {
  * Parse both PDFs deterministically. Runs in the browser (the app) and in
  * Node (the tests); invoice files are never sent anywhere.
  */
-export async function extractInvoices(input: ExtractInput): Promise<ExtractionResult> {
-  const [trDoc, supplierDoc] = await Promise.all([
-    loadPdf(input.trPdf).catch(() => {
-      throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.trFileName}" כ-PDF`);
+export async function extractInvoices(
+  input: ExtractInput,
+  config: CustomerConfig,
+): Promise<ExtractionResult> {
+  const ownParser = ownDocumentParser(config.ownDocument.format);
+  const [ownDoc, supplierDoc] = await Promise.all([
+    loadPdf(input.ownPdf).catch(() => {
+      throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.ownFileName}" כ-PDF`);
     }),
     loadPdf(input.supplierPdf).catch(() => {
       throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.supplierFileName}" כ-PDF`);
     }),
   ]);
 
-  if (!isTeenaRimonDraft(trDoc)) {
+  if (!ownParser.detect(ownDoc)) {
     throw new ExtractionError(
-      isTeenaRimonDraft(supplierDoc)
-        ? "נראה שהקבצים הוחלפו — חשבונית תאנה ורימון הועלתה במקום חשבונית הספק"
-        : `הקובץ "${input.trFileName}" אינו חשבונית טיוטה של תאנה ורימון (AGROLINE)`,
+      ownParser.detect(supplierDoc)
+        ? `נראה שהקבצים הוחלפו — חשבונית ${config.displayName} הועלתה במקום חשבונית הספק`
+        : `הקובץ "${input.ownFileName}" אינו ${config.ownDocument.label} של ${config.displayName}`,
     );
   }
 
@@ -47,20 +57,20 @@ export async function extractInvoices(input: ExtractInput): Promise<ExtractionRe
   if (supplier.lines.length === 0) {
     throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser.displayName}`);
   }
-  const teenaRimon = parseTeenaRimon(trDoc);
+  const own = ownParser.parse(ownDoc, config.displayName);
 
   const digits = (s: string | null) => (s ?? "").replace(/\D/g, "");
-  if (teenaRimon.againstInvoice && !digits(supplier.invoiceNumber).endsWith(digits(teenaRimon.againstInvoice))) {
-    teenaRimon.warnings.push(
-      `חשבונית הטיוטה הופקה כנגד חשבונית ${teenaRimon.againstInvoice}, אבל חשבונית הספק היא ${supplier.invoiceNumber}`,
+  if (own.againstInvoice && !digits(supplier.invoiceNumber).endsWith(digits(own.againstInvoice))) {
+    own.warnings.push(
+      `חשבונית הטיוטה הופקה כנגד חשבונית ${own.againstInvoice}, אבל חשבונית הספק היא ${supplier.invoiceNumber}`,
     );
   }
 
   return {
     supplier,
-    teenaRimon,
+    own,
     meta: {
-      trFileName: input.trFileName,
+      ownFileName: input.ownFileName,
       supplierFileName: input.supplierFileName,
     },
   };

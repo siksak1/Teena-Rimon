@@ -1,9 +1,10 @@
 import type { MatchGroup } from "@core/model.js";
+import customer from "@customer-config";
 import { FLAG_LABEL, money, num, shortDate, signedMoney, signedNum } from "./format";
 
 type Props = {
   groups: MatchGroup[];
-  trDiscountPct: number;
+  ownDiscountPct: number;
   /** Groups shown in the offset section get a neutral tone. */
   tone?: "default" | "offset";
 };
@@ -15,10 +16,10 @@ function groupTone(g: MatchGroup, tone: Props["tone"]): string {
 }
 
 /**
- * One <tbody> per group: the supplier rows, then the Teena-Rimon rows, then a
+ * One <tbody> per group: the supplier rows, then the own-document rows, then a
  * summary row with the differences and the reasons.
  */
-export function MatchedGroupsTable({ groups, trDiscountPct, tone = "default" }: Props) {
+export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }: Props) {
   return (
     <div className="table-wrap">
       <table className="rec-table">
@@ -36,7 +37,7 @@ export function MatchedGroupsTable({ groups, trDiscountPct, tone = "default" }: 
           </tr>
         </thead>
         {groups.map((g) => {
-          const rows = g.supplierLines.length + g.trLines.length + 1;
+          const rows = g.supplierLines.length + g.ownLines.length + 1;
           return (
             <tbody key={g.id} className={`grp ${groupTone(g, tone)}`}>
               {g.supplierLines.map((l, i) => (
@@ -56,15 +57,15 @@ export function MatchedGroupsTable({ groups, trDiscountPct, tone = "default" }: 
                   <td className="mono">{num(l.quantity)}</td>
                   <td className="mono">
                     {num(l.unitPrice)}
-                    {Math.abs(l.discountPct - trDiscountPct) > 0.0005 && <small> (הנחה {num(l.discountPct * 100)}%)</small>}
+                    {Math.abs(l.discountPct - ownDiscountPct) > 0.0005 && <small> (הנחה {num(l.discountPct * 100)}%)</small>}
                   </td>
                   <td className="mono">{money(l.lineTotal)}</td>
                 </tr>
               ))}
-              {g.trLines.map((l) => (
+              {g.ownLines.map((l) => (
                 <tr key={l.id} className="side-tr">
                   <td>
-                    <span className="side-tag side-tag--tr">ת"ר</span>
+                    <span className="side-tag side-tag--tr">{customer.shortName}</span>
                   </td>
                   <td>{shortDate(l.date)}</td>
                   <td className="mono">{l.supplierRef || "—"}</td>
@@ -72,7 +73,7 @@ export function MatchedGroupsTable({ groups, trDiscountPct, tone = "default" }: 
                   <td className="mono">{num(l.packages)}</td>
                   <td className="mono">{num(l.quantity)}</td>
                   <td className="mono">{num(l.unitPrice)}</td>
-                  <td className="mono">{money(Math.round(l.lineTotal * (1 - trDiscountPct) * 100) / 100)}</td>
+                  <td className="mono">{money(Math.round(l.lineTotal * (1 - ownDiscountPct) * 100) / 100)}</td>
                 </tr>
               ))}
               <tr className="grp-summary">

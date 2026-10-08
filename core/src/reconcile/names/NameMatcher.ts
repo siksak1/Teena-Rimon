@@ -107,7 +107,7 @@ export class NameMatcher {
     };
     let text = ` ${tokenize(columns.filter(Boolean).join(" "))} `;
 
-    // "גודל 6.5" (Shivuk) ↔ "65" (Teena-Rimon): sizes below 10 are scaled ×10.
+    // "גודל 6.5" (Shivuk) ↔ "65" (AGROLINE draft): sizes below 10 are scaled ×10.
     text = text.replace(/ גודל (\d+(?:\.\d+)?) /g, (_m, n: string) => {
       const value = Number(n);
       parsed.size = String(value < 10 ? Math.round(value * 10) : value);

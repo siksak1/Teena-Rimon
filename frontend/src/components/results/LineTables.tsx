@@ -1,7 +1,8 @@
-import type { SupplierLine, TrLine } from "@core/model.js";
+import type { OwnLine, SupplierLine } from "@core/model.js";
+import customer from "@customer-config";
 import { money, num, shortDate } from "./format";
 
-/** Supplier rows that have no counterpart at Teena-Rimon. */
+/** Supplier rows that have no counterpart in the wholesaler's own document. */
 export function SupplierOnlyTable({ lines }: { lines: SupplierLine[] }) {
   return (
     <div className="table-wrap">
@@ -41,8 +42,8 @@ export function SupplierOnlyTable({ lines }: { lines: SupplierLine[] }) {
   );
 }
 
-/** Teena-Rimon rows the supplier did not invoice. */
-export function TrOnlyTable({ lines }: { lines: TrLine[] }) {
+/** Own-document rows the supplier did not invoice. */
+export function OwnOnlyTable({ lines }: { lines: OwnLine[] }) {
   return (
     <div className="table-wrap">
       <table className="rec-table">
@@ -50,7 +51,7 @@ export function TrOnlyTable({ lines }: { lines: TrLine[] }) {
           <tr>
             <th>שורה</th>
             <th>תאריך</th>
-            <th>מסמך ת"ר</th>
+            <th>מסמך {customer.shortName}</th>
             <th>אסמכתא</th>
             <th>פריט</th>
             <th>אריזות</th>
@@ -64,7 +65,7 @@ export function TrOnlyTable({ lines }: { lines: TrLine[] }) {
             <tr key={l.id} className="row-missing">
               <td className="mono">{l.id}</td>
               <td>{shortDate(l.date)}</td>
-              <td className="mono">{l.trDocNumber}</td>
+              <td className="mono">{l.ownDocNumber}</td>
               <td className="mono">{l.supplierRef || "—"}</td>
               <td className="name">{[l.product, l.size].filter(Boolean).join(" · ")}</td>
               <td className="mono">{num(l.packages)}</td>

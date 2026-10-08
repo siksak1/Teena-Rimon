@@ -1,0 +1,17 @@
+{
+  "slug": "teena-rimon",
+  "configVersion": 1,
+  "displayName": "תאנה ורימון",
+  "shortName": "ת\"ר",
+  "ownDocument": { "format": "agroline-draft", "label": "חשבונית טיוטה (AGROLINE)" },
+  "referenceRules": ["docNumber", "bookRef"],
+  "tolerances": {
+    "rejectRelativeDiff": 0.05,
+    "maxGroupSize": 4,
+    "sumToleranceKg": 1,
+    "dateWindowDays": 2,
+    "offsetToleranceNis": 1,
+    "arithmeticTolerance": 0.05
+  },
+  "offsetting": "invoice-wide"
+}

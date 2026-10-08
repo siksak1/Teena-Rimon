@@ -1,5 +1,8 @@
+import type { ReferenceRule } from "../customer.js";
+import type { SupplierLine } from "../model.js";
+
 /**
- * Teena-Rimon's "אסמכתא" holds either the supplier's booklet number or the
+ * The wholesaler's "אסמכתא" holds either the supplier's booklet number or the
  * digits of the supplier's delivery document:
  *   "SH2610231" → "2610231", "2SH2605495" → "2605495", "SH26000547" → "26000547".
  * A "<branch>/<number>" document keeps only the number: "21/265134" → "265134".
@@ -12,7 +15,7 @@ export function normalizeRef(value: string | null | undefined): string | null {
   return digits || null;
 }
 
-/** All keys under which Teena-Rimon may have recorded a supplier document. */
-export function supplierRefKeys(docNumber: string | null, bookRef: string | null): string[] {
-  return [normalizeRef(docNumber), normalizeRef(bookRef)].filter((k): k is string => Boolean(k));
+/** All keys under which the wholesaler may have recorded this supplier row's document. */
+export function supplierRefKeys(line: SupplierLine, rules: ReferenceRule[]): string[] {
+  return rules.map((rule) => normalizeRef(line[rule])).filter((k): k is string => Boolean(k));
 }

@@ -1,15 +1,20 @@
 # LedgerMatch — Invoice Reconciliation
 
-Reconciles a supplier's consolidated invoice against Teena-Rimon's AGROLINE draft ("חשבונית טיוטה"). Both PDFs are parsed deterministically (no AI), every supplier row is matched to the Teena-Rimon rows that describe the same delivery, and the gaps are shown by reason in a Hebrew, right-to-left UI.
+Reconciles a supplier's consolidated invoice against the wholesaler's own document (for Teena-Rimon, the first customer: its AGROLINE draft, "חשבונית טיוטה"). Both PDFs are parsed deterministically (no AI), every supplier row is matched to the own-document rows that describe the same delivery, and the gaps are shown by reason in a Hebrew, right-to-left UI.
 
 ## Architecture
 
 ```
 /core       Pure TypeScript — PDF parsers + reconciliation engine (runs in the browser and in Node for tests)
+/customers  <slug>/config.json     ← per-customer settings (see below)
 /frontend   React + Vite           ← UI; parses the PDFs and runs the reconciliation in the browser
 /infra      AWS CDK                ← static hosting (S3 + CloudFront)
 /sample_data                      ← real sample invoices (one pair per supplier) used by the tests
 ```
+
+### Per-customer configuration
+
+The engine and parsers are shared; what differs between wholesalers lives in `customers/<slug>/config.json` (type `CustomerConfig` in `core/src/customer.ts`): display name, own-document format and label, which supplier fields the clerk records as the reference (`referenceRules`), matching tolerances, offsetting on/off, and additions to the product dictionary. The frontend bundles one customer's config through the `@customer-config` alias in `frontend/vite.config.ts`.
 
 ### Invoice files never leave the browser
 
@@ -25,7 +30,7 @@ npm test             # core tests (parsers on the sample PDFs + engine)
 
 ## Supported formats
 
-- **Teena-Rimon** — AGROLINE draft, same layout for every supplier (`core/src/parsers/teenaRimon.ts`).
+- **Own document: AGROLINE draft** (`agroline-draft`, Teena-Rimon) — same layout for every supplier (`core/src/parsers/agrolineDraft.ts`). Own-document formats are registered in `OWN_DOCUMENT_PARSERS` and chosen by `ownDocument.format` in the customer config.
 - **Granot** — `core/src/parsers/granot.ts`
 - **Shivuk HaHof** — `core/src/parsers/shivukHahof.ts`
 - **D. Hai (ד.ח שווק תוצרת חקלאית)** and **Achim Menashri (אחים מנשרי)** — `core/src/parsers/agroline.ts` (supplier-side AGROLINE invoices; line totals before the footer discount)
@@ -39,12 +44,14 @@ The supplier is detected from the PDF (VAT number / company name). To add a supp
 
 ## Matching rules (`core/src/reconcile/`)
 
-1. **Document pairing** — Teena-Rimon's reference equals the supplier's booklet number or the digits of its `SH…` document number. Documents whose references differ are still paired when date (±2 days) and content agree, nearest date first; the gap is flagged "אסמכתא".
+Thresholds below are Teena-Rimon's; each customer sets them under `tolerances` in its config.
+
+1. **Document pairing** — the own document's reference equals the supplier's booklet number or the digits of its `SH…` document number (`referenceRules`). Documents whose references differ are still paired when date (±2 days) and content agree, nearest date first; the gap is flagged "אסמכתא".
 2. **Groups inside a document** — 1:1, or 1:k / k:1 (k ≤ 4) within one product family. Names are a soft signal: rows are matched on document, date, weight and price, and only two different *known* families rule a pair out. Multi-row groups must add up to the same weight. A pair is rejected only when both weight and price differ by more than 5%. The chosen groups cover as many rows as possible, then maximise a score (name, weight, price, packages, date).
 3. **Absorbing** — inside a paired document, a leftover row joins the same-product group whose weight gap it reduces (large or uneven splits, e.g. one row against 12); a row that would only widen a gap stays unmatched.
-4. **Leftovers** — remaining rows are tried across documents (a pair with unrelated names must then agree on both weight and price); whatever is left is listed as "רק אצל הספק" / "רק אצל תאנה ורימון".
-5. **Money** — compared net: the supplier's printed line total (per-line discount, which may be 0%) vs Teena-Rimon's amount minus its commercial discount. Pallet charges and VAT are not compared.
-6. **Offsetting** — when the net item totals are equal, price/weight gaps cancel out and are shown in a separate section.
+4. **Leftovers** — remaining rows are tried across documents (a pair with unrelated names must then agree on both weight and price); whatever is left is listed as "רק אצל הספק" / "רק אצל <customer>".
+5. **Money** — compared net: the supplier's printed line total (per-line discount, which may be 0%) vs the own document's amount minus its commercial discount. Pallet charges and VAT are not compared.
+6. **Offsetting** (`offsetting: "invoice-wide"`) — when the net item totals are equal, price/weight gaps cancel out and are shown in a separate section.
 
 Product names are matched by `NameMatcher` (`core/src/reconcile/names/`): names are parsed into family / colour / cultivar / size / grade using `dictionary.ts`. A product missing from the dictionary falls back to the stem of its first word ("עגבניות" ≈ "עגבניה"), so new products need no dictionary entry; a group matched on numbers alone carries a "שם:" note. The dictionary is optional enrichment — unknown words on matched rows are listed in the UI as dictionary suggestions.
 

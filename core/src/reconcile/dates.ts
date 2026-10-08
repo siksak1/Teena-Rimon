@@ -6,9 +6,8 @@ export function daysBetween(a: string | null, b: string | null): number | null {
   return Math.round((Date.parse(b) - Date.parse(a)) / DAY_MS);
 }
 
-export const DATE_TOLERANCE_DAYS = 2;
-
-export function withinDateTolerance(a: string | null, b: string | null): boolean {
+/** True when the dates are at most `maxDays` apart, or either is unknown. */
+export function withinDays(a: string | null, b: string | null, maxDays: number): boolean {
   const d = daysBetween(a, b);
-  return d == null || Math.abs(d) <= DATE_TOLERANCE_DAYS;
+  return d == null || Math.abs(d) <= maxDays;
 }

@@ -1,4 +1,5 @@
-import type { ExtractionResult, SupplierLine, TrLine } from "../model.js";
+import type { CustomerConfig } from "../customer.js";
+import type { ExtractionResult, OwnLine, SupplierLine } from "../model.js";
 import { round2 } from "../pdf/text.js";
 import type { NameMatcher, ParsedName } from "./names/NameMatcher.js";
 import { normalizeRef, supplierRefKeys } from "./references.js";
@@ -12,42 +13,40 @@ export type SLine = {
   arithmeticOk: boolean;
 };
 
-export type TLine = {
-  line: TrLine;
-  /** Gross × (1 − Teena-Rimon commercial discount). */
+/** Own-document line plus everything the matcher needs, computed once. */
+export type OLine = {
+  line: OwnLine;
+  /** Gross × (1 − the own document's commercial discount). */
   net: number;
   name: ParsedName;
   ref: string | null;
   arithmeticOk: boolean;
 };
 
-/** Rounding slack when checking quantity × price = line total. */
-const ARITHMETIC_TOLERANCE = 0.05;
-
 export function prepare(
   extraction: ExtractionResult,
   matcher: NameMatcher,
-): { supplier: SLine[]; tr: TLine[] } {
-  const trDiscount = extraction.teenaRimon.discountPct;
+  config: CustomerConfig,
+): { supplier: SLine[]; own: OLine[] } {
+  const ownDiscount = extraction.own.discountPct;
+  const slack = config.tolerances.arithmeticTolerance;
 
   const supplier = extraction.supplier.lines.map((line) => ({
     line,
     net: line.lineTotal,
     name: matcher.parse(line.description, line.variety),
-    refs: supplierRefKeys(line.docNumber, line.bookRef),
+    refs: supplierRefKeys(line, config.referenceRules),
     arithmeticOk:
-      Math.abs(line.quantity * line.unitPrice * (1 - line.discountPct) - line.lineTotal) <=
-      ARITHMETIC_TOLERANCE,
+      Math.abs(line.quantity * line.unitPrice * (1 - line.discountPct) - line.lineTotal) <= slack,
   }));
 
-  const tr = extraction.teenaRimon.lines.map((line) => ({
+  const own = extraction.own.lines.map((line) => ({
     line,
-    net: round2(line.lineTotal * (1 - trDiscount)),
+    net: round2(line.lineTotal * (1 - ownDiscount)),
     name: matcher.parse(line.product, line.size),
     ref: normalizeRef(line.supplierRef),
-    arithmeticOk:
-      Math.abs(line.quantity * line.unitPrice - line.lineTotal) <= ARITHMETIC_TOLERANCE,
+    arithmeticOk: Math.abs(line.quantity * line.unitPrice - line.lineTotal) <= slack,
   }));
 
-  return { supplier, tr };
+  return { supplier, own };
 }
