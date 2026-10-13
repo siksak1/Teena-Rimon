@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
 import customer from "@customer-config";
-import { money, percent, signedMoney } from "./format";
+import { money, OCR_MARK, percent, signedMoney } from "./format";
 import { OwnOnlyTable, SupplierOnlyTable } from "./LineTables";
 import { MatchedGroupsTable } from "./MatchedGroupsTable";
 
@@ -13,6 +13,7 @@ type Props = {
 export function ReconciliationView({ extraction, result }: Props) {
   const ownName = customer.displayName;
   const [hideClean, setHideClean] = useState(false);
+  const [exporting, setExporting] = useState<"idle" | "busy" | "failed">("idle");
   const { totals, offset } = result;
   const offsetIds = new Set(offset.groups.map((g) => g.id));
   const mainGroups = result.groups.filter(
@@ -20,6 +21,21 @@ export function ReconciliationView({ extraction, result }: Props) {
   );
   const withGaps = result.groups.filter((g) => g.flags.length > 0).length;
   const isBalanced = Math.abs(totals.diff) < 0.005;
+  const { supplier } = extraction;
+  const ocrUncertain = supplier.lines.filter((l) => l.ocrUncertain).length;
+
+  async function handleExport() {
+    setExporting("busy");
+    try {
+      // Loaded on demand so the spreadsheet writer stays out of the main bundle.
+      const { exportReconciliation } = await import("./exportExcel");
+      await exportReconciliation(extraction, result);
+      setExporting("idle");
+    } catch (err) {
+      console.error(err);
+      setExporting("failed");
+    }
+  }
 
   return (
     <section className="results" aria-label="תוצאות ההתאמה">
@@ -34,6 +50,16 @@ export function ReconciliationView({ extraction, result }: Props) {
           מול חשבונית {ownName} {extraction.own.documentNumber}
           {extraction.own.againstInvoice && ` (כנגד חשבונית ${extraction.own.againstInvoice})`}
         </p>
+        <div className="results__actions">
+          <button type="button" className="btn btn--ghost" onClick={handleExport} disabled={exporting === "busy"}>
+            {exporting === "busy" ? "מייצא…" : "ייצוא לאקסל"}
+          </button>
+          {exporting === "failed" && (
+            <span className="results__error" role="alert">
+              הייצוא נכשל. נסו שוב.
+            </span>
+          )}
+        </div>
       </header>
 
       <div className="totals-grid">
@@ -59,6 +85,18 @@ export function ReconciliationView({ extraction, result }: Props) {
         <span role="listitem">רק אצל הספק: <strong>{result.supplierOnly.length}</strong></span>
         <span role="listitem">רק אצל {ownName}: <strong>{result.ownOnly.length}</strong></span>
       </div>
+
+      {supplier.scanned && (
+        <div className="banner banner--scan" role="status">
+          <strong>חשבונית סרוקה — נקראה בזיהוי תווים (OCR) בדפדפן</strong>
+          <p>
+            כל שורה נבדקה (משקל × מחיר = סה"כ) ועמודות החשבונית נבדקו מול הסיכומים המודפסים בה.{" "}
+            {ocrUncertain === 0
+              ? "כל השורות אומתו."
+              : `${ocrUncertain} שורות לא אומתו ומסומנות "${OCR_MARK}" — יש לבדוק אותן מול החשבונית.`}
+          </p>
+        </div>
+      )}
 
       {result.warnings.length > 0 && (
         <div className="banner banner--warn" role="status">
@@ -123,13 +161,6 @@ export function ReconciliationView({ extraction, result }: Props) {
         )}
       </section>
 
-      {result.dictionarySuggestions.length > 0 && (
-        <section className="results__section">
-          <h3>מילים שלא זוהו בשמות הפריטים</h3>
-          <p className="section-hint">אפשר להוסיף אותן למילון השמות כדי לשפר את ההתאמה.</p>
-          <p className="suggestions">{result.dictionarySuggestions.join(" · ")}</p>
-        </section>
-      )}
     </section>
   );
 }

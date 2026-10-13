@@ -15,7 +15,11 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
-    "paths": { "@core/*": ["../core/src/*"] },
+    "paths": {
+      "@core/*": ["../core/src/*"],
+      "pdfjs-dist": ["../core/node_modules/pdfjs-dist"],
+      "pdfjs-dist/*": ["../core/node_modules/pdfjs-dist/*"]
+    },
 
     /* Linting */
     "noUnusedLocals": true,

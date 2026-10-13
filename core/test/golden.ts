@@ -15,6 +15,15 @@ export function goldenSummary(extraction: ExtractionResult, result: Reconciliati
       lines: supplier.lines.length,
       printedItemsTotal: supplier.printedItemsTotal,
       warnings: supplier.warnings,
+      // Scans: which rows the OCR could not confirm, and what it read on
+      // each — the golden file is the regression check for the OCR itself.
+      ...(supplier.scanned && {
+        ocrUncertain: supplier.lines.filter((l) => l.ocrUncertain).map((l) => `${l.id}:${l.ocrUncertain!.join(",")}`),
+        read: supplier.lines.map(
+          (l) =>
+            `${l.id} ${l.date} ${l.docNumber} ${l.description} | ${l.packages} × ${l.quantity} × ${l.unitPrice} = ${l.lineTotal}`,
+        ),
+      }),
     },
     own: {
       documentNumber: own.documentNumber,

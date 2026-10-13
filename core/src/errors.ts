@@ -7,7 +7,8 @@ export type ExtractionErrorCode =
   | "FILES_SWAPPED"
   | "OWN_DOC_NOT_RECOGNIZED"
   | "UNSUPPORTED_SUPPLIER"
-  | "NO_LINES";
+  | "NO_LINES"
+  | "SCAN_UNREADABLE";
 
 /** Raised when a PDF cannot be parsed; `message` is shown to the user (Hebrew). */
 export class ExtractionError extends Error {

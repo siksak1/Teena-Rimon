@@ -57,7 +57,7 @@ test("is not indexable and runs under the production security headers", async ({
   expect(headers["content-security-policy"]).toContain("connect-src https://eu.i.posthog.com;");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow, noarchive");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("השוואת חשבונית ספק מול תאנה ורימון");
-  await expect(page.locator(".site-foot")).toContainText("תצורה 1");
+  await expect(page.locator(".site-foot")).toContainText("תצורה 2");
 });
 
 test("reconciles real invoices in the browser; only a counts-only event leaves the page", async ({ page, baseURL }) => {
@@ -79,17 +79,38 @@ test("reconciles real invoices in the browser; only a counts-only event leaves t
   expect(watch.consoleErrors).toEqual([]);
 });
 
-test("reports a failure by error code only", async ({ page, baseURL }) => {
+test("reads a scanned invoice by OCR in the browser; nothing but the counts-only event leaves the page", async ({ page, baseURL }) => {
   const watch = await open(page);
   await compare(page, "הר הקור אצל תאנה ורימון.pdf", "הר-קור.pdf");
 
-  await expect(page.locator(".banner--error")).toContainText("החשבונית סרוקה");
+  await expect(page.locator(".results h2")).toContainText("הר-קור · חשבונית 111081", { timeout: 60_000 });
+  await expect(page.locator(".banner--scan")).toContainText("כל השורות אומתו");
+  await expect(page.locator(".ocr-mark")).toHaveCount(0);
+  await expect(page.locator(".total-card--hot strong")).toContainText("595.68");
+
+  await expect.poll(() => watch.analytics.length).toBe(1);
+  expect(watch.analytics[0]).toMatchObject({
+    event: "reconciliation_completed",
+    properties: { supplier_lines: 34, supplier_scanned: true, ocr_uncertain_lines: 0 },
+  });
+  expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]|111081/);
+  // The OCR engine and its models are the app's own script chunks: no fetch, no CSP exception.
+  expect(unexpectedRequests(watch, baseURL!)).toEqual([]);
+  expect(await watch.violations()).toEqual([]);
+  expect(watch.consoleErrors).toEqual([]);
+});
+
+test("reports a failure by error code only", async ({ page, baseURL }) => {
+  const watch = await open(page);
+  await compare(page, "גרנות 17.09.pdf", "גרנות אצל תאנה ורימון.pdf");
+
+  await expect(page.locator(".banner--error")).toContainText("הוחלפו");
   await expect.poll(() => watch.analytics.length).toBe(1);
   expect(watch.analytics[0]).toMatchObject({
     event: "reconciliation_failed",
-    properties: { error_code: "UNSUPPORTED_SUPPLIER" },
+    properties: { error_code: "FILES_SWAPPED" },
   });
-  expect(JSON.stringify(watch.analytics[0])).not.toContain("הר");
+  expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]/);
   expect(unexpectedRequests(watch, baseURL!)).toEqual([]);
   expect(await watch.violations()).toEqual([]);
 });
@@ -105,4 +126,49 @@ test("the browser blocks sending data anywhere else, even to our own server", as
     "connect-src https://example.com/upload",
     expect.stringMatching(/^connect-src http:\/\/127\.0\.0\.1:\d+\/e2e-test-token-0123456789\/upload$/),
   ]);
+});
+
+test("collapses ₪0 groups, filters by column and exports to Excel without leaving the page", async ({ page, baseURL }) => {
+  const watch = await open(page);
+  await compare(page, "גרנות אצל תאנה ורימון.pdf", "גרנות 17.09.pdf");
+
+  const matched = page.locator(".results__section").filter({ has: page.getByRole("heading", { name: "שורות שהוצמדו" }) });
+  const groups = matched.locator("tbody.grp");
+  await expect(groups.first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "מילים שלא זוהו בשמות הפריטים" })).toHaveCount(0);
+
+  // Every collapsed group shows ₪0; every open one shows a money difference.
+  const collapsed = matched.locator("tbody.grp--collapsed");
+  const total = await groups.count();
+  const closed = await collapsed.count();
+  expect(closed).toBeGreaterThan(0);
+  expect(closed).toBeLessThan(total);
+  for (const diff of await collapsed.locator("td:last-child").allTextContents()) expect(diff).toMatch(/^[^1-9]*0[^1-9]*$/);
+  await expect(collapsed.locator("tr")).toHaveCount(closed);
+
+  const first = collapsed.first().getByRole("button", { expanded: false });
+  const id = (await first.getAttribute("aria-label"))!.replace("פתיחת קבוצה ", "");
+  await first.click();
+  await expect(matched.getByRole("button", { name: `סגירת קבוצה ${id}` })).toHaveAttribute("aria-expanded", "true");
+  await matched.getByRole("button", { name: "סגירת הכל" }).click();
+  await expect(matched.locator("tbody.grp--collapsed")).toHaveCount(total);
+  await matched.getByRole("button", { name: "פתיחת הכל" }).click();
+  await expect(matched.locator("tbody.grp--collapsed")).toHaveCount(0);
+
+  await matched.getByRole("searchbox", { name: "סינון לפי פריט" }).fill("פיטאיה");
+  await expect.poll(() => groups.count()).toBeLessThan(total);
+  expect(await groups.count()).toBeGreaterThan(0);
+  for (const g of await groups.allTextContents()) expect(g).toContain("פיטאיה");
+  await matched.getByRole("button", { name: "ניקוי סינון" }).click();
+  await expect(groups).toHaveCount(total);
+
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "ייצוא לאקסל" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("התאמה - גרנות - SI26602203.xlsx");
+  expect((await import("node:fs")).statSync((await download.path())!).size).toBeGreaterThan(5000);
+
+  expect(unexpectedRequests(watch, baseURL!)).toEqual([]);
+  expect(await watch.violations()).toEqual([]);
+  expect(watch.consoleErrors).toEqual([]);
 });

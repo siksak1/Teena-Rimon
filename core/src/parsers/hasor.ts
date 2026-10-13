@@ -10,7 +10,7 @@ import {
   type PdfDocument,
 } from "../pdf/layout.js";
 import { parseDate, parseNumber, parsePercent, round2 } from "../pdf/text.js";
-import type { SupplierParser } from "./types.js";
+import type { TextSupplierParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
 type Key =
@@ -50,7 +50,7 @@ const NET_DRIFT_TOLERANCE = 1;
  * footer discount ("הנחה סחורה 12.00%") while unit prices are before it.
  * Items sold by the unit (pineapple) have no weight.
  */
-export const hasorParser: SupplierParser = {
+export const hasorParser: TextSupplierParser = {
   id: "hasor",
   displayName: "שיווק העשור",
 

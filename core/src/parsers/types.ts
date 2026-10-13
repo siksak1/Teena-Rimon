@@ -1,13 +1,33 @@
 import type { OwnInvoice, SupplierInvoice } from "../model.js";
+import type { GrayImage, OcrEngine } from "../ocr/types.js";
 import type { PdfDocument } from "../pdf/layout.js";
 
 /** One implementation per supplier invoice format. */
-export interface SupplierParser {
+export type SupplierParser = TextSupplierParser | ScannedSupplierParser;
+
+/** A supplier whose invoices are digital PDFs, read from their text. */
+export interface TextSupplierParser {
   id: string;
   displayName: string;
+  scanned?: false;
   /** Cheap check on the document text (VAT number / company name). */
   detect(doc: PdfDocument): boolean;
   parse(doc: PdfDocument): SupplierInvoice;
+}
+
+/** A supplier who sends scanned invoices, read from the page images by OCR. */
+export interface ScannedSupplierParser {
+  id: string;
+  displayName: string;
+  scanned: true;
+  /**
+   * Printed on the invoice. Found in the text layer when the scanner added
+   * one (too garbled to parse, but a VAT number survives), else by OCR of the
+   * top of the first page.
+   */
+  vatId: string;
+  /** `pages` are upright; `onPage` reports progress. */
+  parseScan(pages: GrayImage[], ocr: OcrEngine, onPage?: (done: number) => void): Promise<SupplierInvoice>;
 }
 
 /** One implementation per format of the wholesaler's own document. */

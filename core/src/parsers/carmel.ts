@@ -1,7 +1,7 @@
 import type { SupplierInvoice, SupplierLine } from "../model.js";
 import { amountOnRow, columnsFromHeader, type PdfDocument } from "../pdf/layout.js";
 import { parseDate, parseNumber, round2 } from "../pdf/text.js";
-import type { SupplierParser } from "./types.js";
+import type { TextSupplierParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
 const HEADER = [
@@ -22,7 +22,7 @@ const AMOUNT = /^[\d,]+\.\d{2}$/;
  * Pallet-deposit rows ("משטח פקדון") and page carry-overs are left out; the
  * table ends at "סה"כ ש"ח". No discount is printed.
  */
-export const carmelParser: SupplierParser = {
+export const carmelParser: TextSupplierParser = {
   id: "carmel",
   displayName: "בננות כרמל",
 

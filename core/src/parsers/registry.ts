@@ -6,6 +6,7 @@ import { carmelParser } from "./carmel.js";
 import { galilParser } from "./galil.js";
 import { granotParser } from "./granot.js";
 import { haklaimParser } from "./haklaim.js";
+import { harKorParser } from "./harKor.js";
 import { hasorParser } from "./hasor.js";
 import { shivukHahofParser } from "./shivukHahof.js";
 import type { OwnDocumentParser, SupplierParser } from "./types.js";
@@ -23,16 +24,11 @@ export const SUPPLIER_PARSERS: SupplierParser[] = [
   galilParser,
   carmelParser,
   hasorParser,
+  harKorParser,
 ];
 
 /** Suppliers we recognise but cannot parse, with the reason shown to the user. */
-export const UNSUPPORTED_SUPPLIERS = [
-  {
-    vatId: "513221630",
-    name: "הר-קור",
-    reason: "החשבונית סרוקה (תמונה) ואין בה טקסט קריא — יש לבקש מהספק PDF דיגיטלי",
-  },
-];
+export const UNSUPPORTED_SUPPLIERS: { vatId: string; name: string; reason: string }[] = [];
 
 /** Formats of the wholesaler's own document, by `ownDocument.format` in the customer config. */
 export const OWN_DOCUMENT_PARSERS: Record<string, OwnDocumentParser> = {
@@ -54,6 +50,10 @@ export function supplierParsersFor(config: CustomerConfig): SupplierParser[] {
   });
 }
 
+/**
+ * The supplier whose invoice this is, from the PDF's text. A scanned
+ * supplier is found by its VAT number when the scanner added a text layer.
+ */
 export function detectSupplier(doc: PdfDocument, parsers: SupplierParser[]): SupplierParser | null {
-  return parsers.find((p) => p.detect(doc)) ?? null;
+  return parsers.find((p) => (p.scanned ? doc.text.includes(p.vatId) : p.detect(doc))) ?? null;
 }

@@ -11,7 +11,7 @@ import {
   type Row,
 } from "../pdf/layout.js";
 import { parseDate, parseNumber, round2 } from "../pdf/text.js";
-import type { SupplierParser } from "./types.js";
+import type { TextSupplierParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
 /** Same distance `wrappedText` uses for lines that belong to a data row. */
@@ -56,7 +56,7 @@ function lastDataRow(rows: Row[]): Row | undefined {
   return rows.filter(isDated).at(-1);
 }
 
-export const galilParser: SupplierParser = {
+export const galilParser: TextSupplierParser = {
   id: "galil",
   displayName: "גליל שוק מקומי",
 

@@ -15,10 +15,24 @@ export class ExtractError extends Error {
 
 /**
  * Parse both PDFs in this browser tab — invoice files never leave it. The
- * parsers (and pdf.js, ~1.6 MB) are loaded on demand to keep the first load small.
+ * parsers (and pdf.js, ~1.6 MB) are loaded on demand to keep the first load
+ * small; OCR (~5 MB) only when the supplier invoice is a scan.
+ * `onScanProgress` reports pages read from a scanned invoice.
  */
-export async function extractInvoices(ownFile: File, supplierFile: File): Promise<ExtractionResult> {
-  const { extractInvoices: extract } = await import("@core/extract.js");
+export async function extractInvoices(
+  ownFile: File,
+  supplierFile: File,
+  onScanProgress?: (done: number, total: number) => void,
+): Promise<ExtractionResult> {
+  const [{ extractInvoices: extract }, { GlobalWorkerOptions }, { default: pdfWorker }, { browserScanSupport }] =
+    await Promise.all([
+      import("@core/extract.js"),
+      import("pdfjs-dist"),
+      import("pdfjs-dist/build/pdf.worker.min.mjs?worker&url"),
+      import("./ocr"),
+    ]);
+  // pdf.js parses in its own worker, served from the app's own files.
+  GlobalWorkerOptions.workerSrc = pdfWorker;
   try {
     return await extract(
       {
@@ -28,6 +42,7 @@ export async function extractInvoices(ownFile: File, supplierFile: File): Promis
         supplierFileName: supplierFile.name,
       },
       customer,
+      browserScanSupport(onScanProgress),
     );
   } catch (err) {
     // Matched by name: the class lives in the lazily loaded chunk.

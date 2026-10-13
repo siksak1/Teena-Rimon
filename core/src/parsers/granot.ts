@@ -8,7 +8,7 @@ import {
   type PdfDocument,
 } from "../pdf/layout.js";
 import { parseDate, parseNumber, parsePercent, round2 } from "../pdf/text.js";
-import type { SupplierParser } from "./types.js";
+import type { TextSupplierParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
 type Key =
@@ -46,7 +46,7 @@ const COLUMNS: ColumnSpec<Key>[] = [
  * first row they apply to. Each doc ends with a `סה"כ` row, the table with
  * `סה"כ כללי`, followed by a pallet-charges table we ignore.
  */
-export const granotParser: SupplierParser = {
+export const granotParser: TextSupplierParser = {
   id: "granot",
   displayName: "גרנות",
 

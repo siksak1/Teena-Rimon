@@ -24,6 +24,12 @@ export type SupplierLine = {
   discountPct: number;
   /** Line total as printed — already after the line discount. */
   lineTotal: number;
+  /**
+   * Scanned invoices only: fields the OCR read but could not confirm (the
+   * row's arithmetic and the printed column totals don't add up), e.g.
+   * ["quantity", "lineTotal"]. Absent when everything checked out.
+   */
+  ocrUncertain?: (keyof SupplierLine)[];
 };
 
 export type SupplierInvoice = {
@@ -34,6 +40,8 @@ export type SupplierInvoice = {
   lines: SupplierLine[];
   /** "סה"כ כללי" of the item table, when printed. */
   printedItemsTotal: number | null;
+  /** Read from a scanned image by OCR rather than from the PDF's text. */
+  scanned?: true;
   warnings: string[];
 };
 

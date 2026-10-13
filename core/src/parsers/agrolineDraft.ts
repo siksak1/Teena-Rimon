@@ -99,7 +99,7 @@ function parseAgrolineDraft(doc: PdfDocument, customerName: string): OwnInvoice 
   checkTotal(`חשבונית ${customerName}`, gross, printedGrossTotal, warnings);
 
   const commercialDiscount = footerAmount(doc, "הנחה מסחרית") ?? 0;
-  if (!commercialDiscount) warnings.push(`לא נמצאה "הנחה מסחרית" בחשבונית ${customerName} — ההשוואה מניחה 0%`);
+  if (!commercialDiscount) warnings.push(missingDiscountWarning(customerName));
 
   return {
     documentNumber: doc.text.match(/חשבונית טיוטה\s+(\d+)/)?.[1] ?? "",
@@ -110,6 +110,10 @@ function parseAgrolineDraft(doc: PdfDocument, customerName: string): OwnInvoice 
     discountPct: gross ? commercialDiscount / gross : 0,
     warnings,
   };
+}
+
+export function missingDiscountWarning(customerName: string): string {
+  return `לא נמצאה "הנחה מסחרית" בחשבונית ${customerName} — ההשוואה מניחה 0%`;
 }
 
 /**

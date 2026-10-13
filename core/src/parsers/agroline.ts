@@ -8,7 +8,7 @@ import {
   type PdfDocument,
 } from "../pdf/layout.js";
 import { parseDate, parseNumber, parsePercent, round2 } from "../pdf/text.js";
-import type { SupplierParser } from "./types.js";
+import type { TextSupplierParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
 type Key =
@@ -50,7 +50,7 @@ type AgrolineSupplier = { id: string; displayName: string; vatId: string };
  * once in the footer ("הנחה 12.0%"); the footer starts at "פדיון".
  * The wholesaler's own drafts come from AGROLINE too, so detect by VAT id only.
  */
-function agrolineParser({ id, displayName, vatId }: AgrolineSupplier): SupplierParser {
+function agrolineParser({ id, displayName, vatId }: AgrolineSupplier): TextSupplierParser {
   const label = `חשבונית ${displayName}`;
   return {
     id,

@@ -4,12 +4,13 @@
 
 ## עברית
 
-> **עיבוד החשבוניות.** LedgerMatch קורא ומעבד את קובצי החשבוניות בתוך דפדפן האינטרנט במחשב הלקוח בלבד. קובצי החשבוניות ותוכנם אינם מועלים, אינם נשמרים ואינם מעובדים בשרתי הספק או אצל צד שלישי כלשהו.
+> **עיבוד החשבוניות.** LedgerMatch קורא ומעבד את קובצי החשבוניות בתוך דפדפן האינטרנט במחשב הלקוח בלבד, כולל זיהוי תווים (OCR) בחשבוניות סרוקות. קובצי החשבוניות ותוכנם אינם מועלים, אינם נשמרים ואינם מעובדים בשרתי הספק או אצל צד שלישי כלשהו.
 >
 > **אכיפה טכנית.** התוכנה מסופקת כקבצים סטטיים, ללא קוד צד-שרת. מדיניות אבטחה שהדפדפן אוכף (Content Security Policy) מתירה לתוכנה ליצור קשר רק עם שירות הסטטיסטיקה שלנו, וחוסמת כל שליחת נתונים לכל כתובת אחרת.
 >
 > **סטטיסטיקת שימוש.** לאחר כל השוואה נשלחת לשירות הסטטיסטיקה (PostHog, באיחוד האירופי) הודעה הכוללת נתונים מספריים בלבד:
 > - מספר השורות בכל חשבונית;
+> - האם חשבונית הספק הייתה סרוקה, ובכמה משורותיה זיהוי התווים לא אומת;
 > - מספר ההתאמות, הפערים והשורות שלא הותאמו;
 > - זמן העיבוד;
 > - גרסת התוכנה וסוג הדפדפן;
@@ -23,12 +24,13 @@
 
 ## English
 
-> **Invoice processing.** LedgerMatch reads and processes invoice files only inside the web browser on the customer's computer. Invoice files and their contents are never uploaded to, stored on, or processed by the provider's servers or any third party.
+> **Invoice processing.** LedgerMatch reads and processes invoice files only inside the web browser on the customer's computer, including text recognition (OCR) of scanned invoices. Invoice files and their contents are never uploaded to, stored on, or processed by the provider's servers or any third party.
 >
 > **Technical enforcement.** The software is delivered as static files with no server-side code. A security policy enforced by the browser (Content Security Policy) allows it to contact only our usage-statistics service and blocks sending data to any other address.
 >
 > **Usage statistics.** After each comparison, a message containing only numbers is sent to the statistics service (PostHog, in the EU):
 > - the number of lines on each invoice;
+> - whether the supplier invoice was a scan, and on how many of its lines the text recognition could not be confirmed;
 > - the number of matches, discrepancies and unmatched lines;
 > - processing time;
 > - the software version and browser type;

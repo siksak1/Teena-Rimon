@@ -1,3 +1,4 @@
+import { openPdf } from "./pdfjs.js";
 import { collapseWhitespace, fixMirroring, parseNumber } from "./text.js";
 
 export type TextItem = {
@@ -42,11 +43,7 @@ const WORD_GAP = 1.2;
 const CELL_GAP = 4.5;
 
 export async function loadPdf(data: Uint8Array): Promise<PdfDocument> {
-  // Loaded on first use, so code that only needs the parsers' metadata
-  // (the UI's supplier list) doesn't pull pdf.js (~1.6 MB) into its bundle.
-  const { getDocumentProxy } = await import("unpdf");
-  // pdf.js may detach the buffer it is given — hand it a copy.
-  const pdf = await getDocumentProxy(new Uint8Array(data));
+  const { pdf, close } = await openPdf(data);
   const pages: Row[][] = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
@@ -64,7 +61,7 @@ export async function loadPdf(data: Uint8Array): Promise<PdfDocument> {
     }
     pages.push(toRows(items));
   }
-  await pdf.cleanup();
+  await close();
   const rows = pages.flat();
   return { pages, rows, text: rows.map((r) => r.text).join("\n") };
 }

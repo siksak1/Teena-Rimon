@@ -5,6 +5,12 @@ import type { Candidate } from "./groupMatching.js";
 import type { NameMatcher } from "./names/NameMatcher.js";
 
 const EPS = 0.001;
+/**
+ * Prices are printed in agorot. A list price recovered from an already
+ * discounted one (see `unprintedDiscounts`) can be off by half an agora
+ * divided by (1 − rate), so smaller price gaps are not reported.
+ */
+const PRICE_EPS = 0.006;
 
 /**
  * Turn a matched candidate into a group with its gaps spelled out (Hebrew
@@ -41,7 +47,7 @@ export function describeGroup(
 
   const sPrices = unique(s.map((x) => x.line.unitPrice));
   const tPrices = unique(t.map((x) => x.line.unitPrice));
-  if (sPrices.some((a) => tPrices.some((b) => Math.abs(a - b) > EPS))) {
+  if (sPrices.some((a) => tPrices.some((b) => Math.abs(a - b) > PRICE_EPS))) {
     flags.add("price");
     notes.push(`מחיר: ספק ${sPrices.map(fmt).join("/")}, ${ownName} ${tPrices.map(fmt).join("/")}`);
   }

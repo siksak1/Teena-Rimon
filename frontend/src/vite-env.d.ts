@@ -10,3 +10,9 @@ declare module "@customer-config" {
   const config: import("@core/customer.js").CustomerConfig;
   export default config;
 }
+
+/** A binary file bundled as base64 (see `bundledBinaries` in vite.config.ts). */
+declare module "virtual:binary/*" {
+  const base64: string;
+  export default base64;
+}

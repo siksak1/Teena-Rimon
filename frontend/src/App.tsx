@@ -1,5 +1,5 @@
 import { useRef, useState, useTransition } from "react";
-import { completedEvent, failedEvent } from "@core/analytics.js";
+import { completedEvent, failedEvent, lineCounts } from "@core/analytics.js";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
 import { supplierParsersFor } from "@core/parsers/registry.js";
 import { reconcile } from "@core/reconcile/reconcile.js";
@@ -20,9 +20,13 @@ export default function App() {
   const [supplierFile, setSupplierFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<UiPhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  /** Pages of a scanned supplier invoice read so far, while OCR runs. */
+  const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<{
     extraction: ExtractionResult;
     reconciliation: ReconciliationResult;
+    /** Remounts the results view, so collapse and filter state start fresh for each comparison. */
+    run: number;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
   const abortRef = useRef<AbortController | null>(null);
@@ -38,23 +42,25 @@ export default function App() {
 
     setPhase("extracting");
     setError(null);
+    setScanProgress(null);
 
     try {
       const started = performance.now();
-      const extraction = await extractInvoices(ownFile, supplierFile);
+      const extraction = await extractInvoices(ownFile, supplierFile, (done, total) => {
+        if (!controller.signal.aborted) setScanProgress({ done, total });
+      });
       // Parsing can't be cancelled; ignore results that arrive after a reset or a newer run.
       if (controller.signal.aborted) return;
       const parsed = performance.now();
       const reconciliation = reconcile(extraction, customer);
-      const lines = { supplier: extraction.supplier.lines.length, own: extraction.own.lines.length };
       track(
-        completedEvent(analyticsContext, reconciliation, lines, {
+        completedEvent(analyticsContext, reconciliation, lineCounts(extraction), {
           parseMs: parsed - started,
           reconcileMs: performance.now() - parsed,
         }),
       );
       startTransition(() => {
-        setResult({ extraction, reconciliation });
+        setResult((prev) => ({ extraction, reconciliation, run: (prev?.run ?? 0) + 1 }));
         setPhase("ready");
       });
     } catch (err) {
@@ -137,7 +143,9 @@ export default function App() {
           </button>
           {phase === "extracting" && (
             <span className="actions__status" role="status">
-              קורא את הקבצים…
+              {scanProgress
+                ? `קורא חשבונית סרוקה (זיהוי תווים)… עמוד ${Math.min(scanProgress.done + 1, scanProgress.total)} מתוך ${scanProgress.total}`
+                : "קורא את הקבצים…"}
             </span>
           )}
         </div>
@@ -149,7 +157,7 @@ export default function App() {
           </div>
         )}
 
-        {result && <ReconciliationView extraction={result.extraction} result={result.reconciliation} />}
+        {result && <ReconciliationView key={result.run} extraction={result.extraction} result={result.reconciliation} />}
       </main>
 
       <footer className="site-foot">

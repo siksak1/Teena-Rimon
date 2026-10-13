@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { browserFamily, completedEvent, failedEvent, posthogBody, type AnalyticsContext } from "../src/analytics.js";
+import { browserFamily, completedEvent, failedEvent, lineCounts, posthogBody, type AnalyticsContext } from "../src/analytics.js";
 import { ExtractionError } from "../src/errors.js";
 import { reconcile } from "../src/reconcile/reconcile.js";
-import { extractSample, PAIRS, TEENA_RIMON } from "./helpers.js";
+import { extractCase, extractSample, PAIRS, TEENA_RIMON } from "./helpers.js";
 
 const ctx: AnalyticsContext = { config: TEENA_RIMON, appVersion: "1.0.0+abc1234", browser: "chrome-129" };
 
@@ -11,7 +11,8 @@ const COMPLETED_KEYS = [
   "customer", "app_version", "config_version", "browser",
   "supplier_lines", "own_lines", "matched_groups", "discrepancy_count",
   "unmatched_supplier", "unmatched_own", "discrepancy_amount_nis",
-  "offset_applied", "parser_warnings", "parse_ms", "reconcile_ms",
+  "offset_applied", "supplier_scanned", "ocr_uncertain_lines",
+  "parser_warnings", "parse_ms", "reconcile_ms",
   "$process_person_profile",
 ].sort();
 const FAILED_KEYS = ["customer", "app_version", "config_version", "browser", "error_code", "$process_person_profile"].sort();
@@ -19,13 +20,13 @@ const FAILED_KEYS = ["customer", "app_version", "config_version", "browser", "er
 const ALLOWED_STRINGS = new Set(["phc_test", "reconciliation_completed", "reconciliation_failed", "teena-rimon", "1.0.0+abc1234", "chrome-129"]);
 
 describe("analytics payloads", () => {
-  for (const pair of Object.keys(PAIRS).filter((p) => p !== "harKor")) {
+  for (const pair of Object.keys(PAIRS)) {
     it(`${pair}: sends only whitelisted counts`, async () => {
       const extraction = await extractSample(pair);
       const result = reconcile(extraction, TEENA_RIMON);
       const body = posthogBody(
         "phc_test",
-        completedEvent(ctx, result, { supplier: extraction.supplier.lines.length, own: extraction.own.lines.length }, { parseMs: 812.4, reconcileMs: 40.6 }),
+        completedEvent(ctx, result, lineCounts(extraction), { parseMs: 812.4, reconcileMs: 40.6 }),
       );
 
       expect(Object.keys(body).sort()).toEqual(["api_key", "distinct_id", "event", "properties"]);
@@ -53,23 +54,31 @@ describe("analytics payloads", () => {
   it("leaves the amount out when the customer has not opted in", async () => {
     const extraction = await extractSample("shivuk");
     const config = { ...TEENA_RIMON, analytics: { sendDiscrepancyAmount: false } };
-    const e = completedEvent({ ...ctx, config }, reconcile(extraction, config), { supplier: 1, own: 1 }, { parseMs: 1, reconcileMs: 1 });
+    const e = completedEvent({ ...ctx, config }, reconcile(extraction, config), { supplier: 1, own: 1, scanned: false, ocrUncertain: 0 }, { parseMs: 1, reconcileMs: 1 });
     expect(e.properties).not.toHaveProperty("discrepancy_amount_nis");
   });
 
   it("rounds the amount to ₪10", async () => {
     const extraction = await extractSample("shivuk"); // net gap −814.25
-    const e = completedEvent(ctx, reconcile(extraction, TEENA_RIMON), { supplier: 1, own: 1 }, { parseMs: 1, reconcileMs: 1 });
+    const e = completedEvent(ctx, reconcile(extraction, TEENA_RIMON), { supplier: 1, own: 1, scanned: false, ocrUncertain: 0 }, { parseMs: 1, reconcileMs: 1 });
     expect(e.properties).toMatchObject({ discrepancy_amount_nis: 810 });
   });
 
   it("reports a failure by code only, never the message (which holds file names)", async () => {
-    const err = await extractSample("harKor").catch((e: unknown) => e);
+    const { own, supplier } = PAIRS.granot;
+    const err = await extractCase({ own: supplier, supplier: own }, TEENA_RIMON).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ExtractionError);
+    expect((err as ExtractionError).message).toContain("הוחלפו");
     const body = posthogBody("phc_test", failedEvent(ctx, (err as ExtractionError).code));
     expect(Object.keys(body.properties).sort()).toEqual(FAILED_KEYS);
-    expect(body.properties).toMatchObject({ error_code: "UNSUPPORTED_SUPPLIER" });
-    expect(JSON.stringify(body)).not.toContain("הר");
+    expect(body.properties).toMatchObject({ error_code: "FILES_SWAPPED" });
+    expect(JSON.stringify(body)).not.toMatch(/[א-ת]/);
+  });
+
+  it("reports a scanned invoice and how many of its rows OCR could not confirm", async () => {
+    const extraction = await extractSample("harKor");
+    const e = completedEvent(ctx, reconcile(extraction, TEENA_RIMON), lineCounts(extraction), { parseMs: 1, reconcileMs: 1 });
+    expect(e.properties).toMatchObject({ supplier_scanned: true, ocr_uncertain_lines: 0, supplier_lines: 34 });
   });
 });
 

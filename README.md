@@ -5,7 +5,7 @@ Reconciles a supplier's consolidated invoice against the wholesaler's own docume
 ## Architecture
 
 ```
-/core       Pure TypeScript — PDF parsers + reconciliation engine (runs in the browser and in Node for tests)
+/core       Pure TypeScript — PDF parsers, OCR of scanned invoices, reconciliation engine (runs in the browser and in Node for tests)
 /customers  <slug>/config.json     ← per-customer settings (see below)
 /frontend   React + Vite           ← UI; parses the PDFs and runs the reconciliation in the browser
 /infra      AWS CDK                ← static hosting (S3 + CloudFront + routing function), see DEPLOY.md
@@ -16,7 +16,7 @@ Reconciles a supplier's consolidated invoice against the wholesaler's own docume
 
 ### Per-customer configuration
 
-The engine and parsers are shared; what differs between wholesalers lives in `customers/<slug>/config.json`, validated by the zod schema in `core/src/customer.ts`: display name, own-document format and label, which supplier parsers the customer gets (`suppliers`), which supplier fields the clerk records as the reference (`referenceRules`), matching tolerances, offsetting on/off, and additions to the product dictionary. Bump `configVersion` on every change; the footer shows it next to the app version.
+The engine and parsers are shared; what differs between wholesalers lives in `customers/<slug>/config.json`, validated by the zod schema in `core/src/customer.ts`: display name, own-document format and label, which supplier parsers the customer gets (`suppliers`), which supplier fields the clerk records as the reference (`referenceRules`), matching tolerances, agreed discounts for suppliers that print none (`unprintedDiscounts`, e.g. Bananot Carmel at 12%), offsetting on/off, and additions to the product dictionary. Bump `configVersion` on every change; the footer shows it next to the app version.
 
 Each build is for one customer, and only that customer's config is bundled:
 
@@ -28,7 +28,15 @@ The build fails if `CUSTOMER` is missing or the config is invalid. `npm run dev`
 
 ### Invoice files never leave the browser
 
-Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core/src/extract.ts`); there is no server-side code. pdf.js (~1.6 MB) is loaded on demand when the first comparison runs, and fonts are bundled (`@fontsource/*`), so the app makes no third-party requests.
+Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core/src/extract.ts`); there is no server-side code. pdf.js (`pdfjs-dist`, ~1.6 MB, in its own worker) is loaded on demand when the first comparison runs, and fonts are bundled (`@fontsource/*`), so the app makes no third-party requests.
+
+**Scanned invoices** (Har-Kor) are read by OCR in the same tab:
+
+- `core/src/pdf/scan.ts` takes each page's image from pdf.js (CCITT/JBIG2 scans need pdf.js's `jbig2.wasm`), applies the page rotation and finds the ruled table's rows and columns.
+- `core/src/ocr/` reads each column with Tesseract (`tesseract-wasm`, models `eng` for digits and `heb` for names) inside a Web Worker (`frontend/src/api/ocrWorker.ts`).
+- The parser checks every row (weight × price = total) and every column against the printed totals. It corrects a misread only when those totals prove the correction (`confirmAmounts` in `core/src/parsers/validate.ts`); anything else is shown with a "⚠ לבדיקה" mark.
+- The CSP lets the page fetch nothing but analytics, so the decoder, Tesseract and its models (~7 MB as base64, `bundledBinaries` in `frontend/vite.config.ts`) ship as the app's own script chunks, loaded only when a scan is uploaded. The CSP's `'wasm-unsafe-eval'` lets the page compile this WebAssembly; it does not allow `eval()` of JavaScript.
+- The tests run the same OCR in Node (`core/test/scanSupport.ts`).
 
 ## Quick start
 
@@ -43,8 +51,8 @@ npm run e2e          # production build in Chromium under the production headers
 
 After each comparison the app sends one event to PostHog Cloud EU (`frontend/src/analytics.ts`); the payload is built in `core/src/analytics.ts` and nothing else is ever sent:
 
-- `reconciliation_completed`: customer slug, app version, config version, browser family (e.g. `chrome-129`), line counts on both sides, matched groups, groups with gaps, unmatched rows on each side, offset applied, parser-warning count, parse and reconcile time in ms, and — only when the customer's config sets `analytics.sendDiscrepancyAmount` — the invoice's net gap rounded to ₪10.
-- `reconciliation_failed`: the same identifying fields plus a fixed `error_code` (`NOT_PDF`, `FILES_SWAPPED`, `OWN_DOC_NOT_RECOGNIZED`, `UNSUPPORTED_SUPPLIER`, `NO_LINES`, `INTERNAL`). Error messages are never sent: they contain file names.
+- `reconciliation_completed`: customer slug, app version, config version, browser family (e.g. `chrome-129`), line counts on both sides, matched groups, groups with gaps, unmatched rows on each side, offset applied, whether the supplier invoice was a scan and how many of its rows OCR could not confirm, parser-warning count, parse and reconcile time in ms, and — only when the customer's config sets `analytics.sendDiscrepancyAmount` — the invoice's net gap rounded to ₪10.
+- `reconciliation_failed`: the same identifying fields plus a fixed `error_code` (`NOT_PDF`, `FILES_SWAPPED`, `OWN_DOC_NOT_RECOGNIZED`, `UNSUPPORTED_SUPPLIER`, `NO_LINES`, `SCAN_UNREADABLE`, `INTERNAL`). Error messages are never sent: they contain file names.
 
 `distinct_id` is the customer slug and person profiles are off, so no individual user is identified. Requests carry no cookies and no `Referer` (the secret URL path never leaves the page). Sending is fire-and-forget, and the dev server only logs the payload to the console. `core/test/analytics.test.ts` pins the exact property list and checks, on every sample pair, that no supplier name, invoice or document number, product name or file name appears in the payload. In the PostHog project settings, keep "Discard client IP data" on.
 
@@ -77,7 +85,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs `npm test`, the typecheck/build
 - **Galil Shuk Mekomi (גליל שוק מקומי)** — `core/src/parsers/galil.ts` (3-row header, product names wrapped over several lines)
 - **Shivuk HaAsor (שיווק העשור)** — `core/src/parsers/hasor.ts` (detected by layout, since the name is only in the logo; net line totals, gross unit prices)
 - **Bananot Carmel (בננות כרמל)** — `core/src/parsers/carmel.ts`
-- **Not supported:** Har HaKor (הר-קור) sends scanned invoices with no usable text. It gets a specific error asking for a digital PDF (`UNSUPPORTED_SUPPLIERS` in `registry.ts`).
+- **Har-Kor (הר-קור)** — `core/src/parsers/harKor.ts`. Scanned invoices only, read by OCR (see above). It is detected by its VAT number, either in the scanner's own text layer (too garbled to parse) or by OCR of the page header. Product short forms ("ש", "נ") are spelled out, and OCR'd names are snapped to Har-Kor's product list.
 
 The supplier is detected from the PDF (VAT number / company name), among the parsers the customer's config enables. To add a supplier, write a `SupplierParser` (see `core/src/parsers/types.ts`), register it in `SUPPLIER_PARSERS` in `core/src/parsers/registry.ts`, and add its id to `suppliers` in the configs of the customers who need it. Each parser checks that its lines add up to the total printed on the PDF and warns otherwise.
 
@@ -89,10 +97,10 @@ Thresholds below are Teena-Rimon's; each customer sets them under `tolerances` i
 2. **Groups inside a document** — 1:1, or 1:k / k:1 (k ≤ 4) within one product family. Names are a soft signal: rows are matched on document, date, weight and price, and only two different *known* families rule a pair out. Multi-row groups must add up to the same weight. A pair is rejected only when both weight and price differ by more than 5%. The chosen groups cover as many rows as possible, then maximise a score (name, weight, price, packages, date).
 3. **Absorbing** — inside a paired document, a leftover row joins the same-product group whose weight gap it reduces (large or uneven splits, e.g. one row against 12); a row that would only widen a gap stays unmatched.
 4. **Leftovers** — remaining rows are tried across documents (a pair with unrelated names must then agree on both weight and price); whatever is left is listed as "רק אצל הספק" / "רק אצל <customer>".
-5. **Money** — compared net: the supplier's printed line total (per-line discount, which may be 0%) vs the own document's amount minus its commercial discount. Pallet charges and VAT are not compared.
+5. **Money** — compared net: the supplier's printed line total (per-line discount, which may be 0%) vs the own document's amount minus its commercial discount. For a supplier in `unprintedDiscounts`, its already-discounted prices are restated as list price less that rate and the own document's missing commercial discount is taken at the same rate (`core/src/extract.ts`). Pallet charges and VAT are not compared.
 6. **Offsetting** (`offsetting: "invoice-wide"`) — when the net item totals are equal, price/weight gaps cancel out and are shown in a separate section.
 
-Product names are matched by `NameMatcher` (`core/src/reconcile/names/`): names are parsed into family / colour / cultivar / size / grade using `dictionary.ts`. A product missing from the dictionary falls back to the stem of its first word ("עגבניות" ≈ "עגבניה"), so new products need no dictionary entry; a group matched on numbers alone carries a "שם:" note. The dictionary is optional enrichment — unknown words on matched rows are listed in the UI as dictionary suggestions.
+Product names are matched by `NameMatcher` (`core/src/reconcile/names/`): names are parsed into family / colour / cultivar / size / grade using `dictionary.ts`. A product missing from the dictionary falls back to the stem of its first word ("עגבניות" ≈ "עגבניה"), so new products need no dictionary entry; a group matched on numbers alone carries a "שם:" note. The dictionary is optional enrichment — unknown words on matched rows are returned as `dictionarySuggestions` (not shown in the UI).
 
 ## Deployment (AWS)
 
@@ -113,7 +121,7 @@ https://<host>/<token>/     token → {customer, build}                builds/<c
 | Item | At current scale (1 customer, ~2,000 comparisons/month) |
 | --- | --- |
 | CloudFront: transfer, requests, Function invocations | $0 (always-free tier: 1 TB, 10M requests, 2M function invocations) |
-| S3 (≈3 MB per build) and the KeyValueStore | a few cents |
+| S3 (≈12 MB per build, ~7 MB of it OCR loaded only for scans) and the KeyValueStore | a few cents |
 | PostHog Cloud EU | $0 (free tier: 1M events; ~1 event per comparison) |
 
 A handful of customers stays within the free tiers. A custom domain later adds the domain fee only, because the ACM certificate is free.

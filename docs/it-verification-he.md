@@ -45,6 +45,7 @@ LedgerMatch משווה בין חשבונית ספק לבין החשבונית ש
 | `unmatched_supplier`, `unmatched_own` | כמה שורות נשארו בלי התאמה, בכל צד |
 | `discrepancy_amount_nis` | הפער הכולל בין החשבוניות בשקלים, **מעוגל ל-10 ₪**. נשלח רק אם הוסכם בחוזה |
 | `offset_applied`, `parser_warnings` | האם היה קיזוז, וכמה אזהרות קריאה היו |
+| `supplier_scanned`, `ocr_uncertain_lines` | האם חשבונית הספק הייתה סרוקה, וכמה משורותיה זיהוי התווים לא הצליח לאמת |
 | `parse_ms`, `reconcile_ms` | זמן העיבוד במילישניות |
 
 אם ההשוואה נכשלה, נשלח במקום זה `error_code`: קוד קבוע כמו `UNSUPPORTED_SUPPLIER`, **בלי** טקסט הודעת השגיאה.
@@ -57,12 +58,14 @@ LedgerMatch משווה בין חשבונית ספק לבין החשבונית ש
 2. בלשונית **Headers**, תחת **Response Headers**, חפשו את `content-security-policy`:
 
 ```
-default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:;
+default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; font-src 'self'; img-src 'self' data:;
 connect-src https://eu.i.posthog.com; worker-src 'self'; base-uri 'none'; form-action 'none';
 frame-ancestors 'none'; object-src 'none'
 ```
 
 ההנחיה החשובה היא **`connect-src https://eu.i.posthog.com`**. המשמעות: הדפדפן ירשה לדף ליצור קשר עם כתובת אחת בלבד, שירות הסטטיסטיקה. כל ניסיון לשלוח נתונים לכל כתובת אחרת ייחסם על ידי הדפדפן, **גם לשרת שלנו**. זה כולל גם שליחה בטעות, למשל מתקלה בקוד או מספרייה חיצונית.
+
+ההנחיה `'wasm-unsafe-eval'` מאפשרת לדף להריץ WebAssembly מתוך הקבצים של התוכנה עצמה. כך נקראות חשבוניות סרוקות: זיהוי התווים (OCR) רץ בדפדפן, והחשבונית הסרוקה לא נשלחת לשום שירות. ההנחיה הזו לא מאפשרת להריץ קוד JavaScript מתוך טקסט (`eval`), ולא משנה את `connect-src`. גם קבצי זיהוי התווים נטענים כחלק מקבצי התוכנה, ולא מכתובת חיצונית.
 
 ## בדיקה 4: לנסות "להבריח" נתונים בעצמכם
 

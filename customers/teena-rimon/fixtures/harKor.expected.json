@@ -1,3 +1,493 @@
 {
-  "error": "חשבונית הר-קור אינה נתמכת: החשבונית סרוקה (תמונה) ואין בה טקסט קריא — יש לבקש מהספק PDF דיגיטלי"
+  "supplier": {
+    "parser": "har-kor",
+    "invoiceNumber": "111081",
+    "lines": 34,
+    "printedItemsTotal": 81971.74,
+    "warnings": [],
+    "ocrUncertain": [],
+    "read": [
+      "S1 2026-07-29 3948 שזיף לריאן | 60 × 630 × 5 = 2772",
+      "S2 2026-08-04 3503 אפרסק סמרסט | 60 × 507 × 7.5 = 3346.2",
+      "S3 2026-08-05 3541 נקטרינה דורינה | 46 × 480 × 7.8 = 3294.72",
+      "S4 2026-08-05 3541 אפרסק סמרסט | 60 × 497 × 7 = 3061.52",
+      "S5 2026-08-05 3541 אגס ספדונה | 60 × 629 × 4 = 2214.08",
+      "S6 2026-08-05 3541 שזיף בלאק דיימונד | 45 × 483 × 4.5 = 1912.68",
+      "S7 2026-08-07 3650 אפרסק סמרסט | 60 × 538 × 5 = 2367.2",
+      "S8 2026-08-07 3650 שזיף | 48 × 508 × 2.5 = 1117.6",
+      "S9 2026-08-09 3687 נקטרינה דורינה | 60 × 516 × 5 = 2270.4",
+      "S10 2026-08-09 3687 אגס קוסטיה | 60 × 548 × 2.5 = 1205.6",
+      "S11 2026-08-09 3687 שזיף בלאק דיימונד | 60 × 625 × 4.7 = 2585",
+      "S12 2026-08-09 3687 שזיף | 36 × 385 × 4.5 = 1524.6",
+      "S13 2026-08-09 3687 שזיף | 35 × 393 × 5 = 1729.2",
+      "S14 2026-08-10 3749 נקטרינה דורינה | 60 × 566 × 5 = 2490.4",
+      "S15 2026-08-10 3749 אפרסק סמרסט | 60 × 500 × 5 = 2200",
+      "S16 2026-08-11 3791 נקטרינה דורינה | 17 × 173 × 5 = 761.2",
+      "S17 2026-08-11 3791 נקטרינה פלברטופ | 43 × 434 × 5 = 1909.6",
+      "S18 2026-08-11 3791 אפרסק סמרסט | 60 × 515 × 9.5 = 4305.4",
+      "S19 2026-08-12 3848 נקטרינה דורינה | 60 × 594 × 5 = 2613.6",
+      "S20 2026-08-12 3848 אפרסק סמרסט | 60 × 605 × 9 = 4791.6",
+      "S21 2026-08-12 3848 שזיף בלאק דיימונד | 60 × 617 × 3 = 1628.88",
+      "S22 2026-08-12 3848 שזיף לטיציה | 48 × 517 × 5 = 2274.8",
+      "S23 2026-08-16 3963 נקטרינה דורינה | 60 × 556 × 4 = 1957.12",
+      "S24 2026-08-16 3963 אגס קוסטיה | 60 × 559 × 4 = 1967.68",
+      "S25 2026-08-16 3963 שזיף בלאק דיימונד | 60 × 643 × 3 = 1697.52",
+      "S26 2026-08-16 3963 שזיף | 48 × 491 × 4 = 1728.32",
+      "S27 2026-08-18 4070 אפרסק 188 | 52 × 516 × 9 = 4086.72",
+      "S28 2026-08-21 4204 אפרסק 1881 | 60 × 679 × 8 = 4780.16",
+      "S29 2026-08-23 4261 נקטרינה דורינה | 60 × 582 × 5.5 = 2816.88",
+      "S30 2026-08-25 4329 אפרסק 1881 | 39 × 326 × 8 = 2295.04",
+      "S31 2026-08-25 4329 אפרסק שלו | 21 × 182 × 8 = 1281.28",
+      "S32 2026-08-26 4391 אפרסק 1881 | 21 × 180 × 7.3 = 1156.32",
+      "S33 2026-08-26 4391 אפרסק 188 | 39 × 334 × 7.3 = 2145.62",
+      "S34 2026-08-27 4453 אפרסק 1881 | 63 × 558 × 7.5 = 3682.8"
+    ]
+  },
+  "own": {
+    "documentNumber": "10034",
+    "againstInvoice": "111081",
+    "lines": 31,
+    "commercialDiscount": 10954.28,
+    "discountPct": 0.117131,
+    "warnings": []
+  },
+  "totals": {
+    "supplierNet": 81971.74,
+    "ownGross": 93521.7,
+    "ownDiscountPct": 0.117131,
+    "ownNet": 82567.42,
+    "diff": 595.68
+  },
+  "groups": [
+    {
+      "rows": "S8→T7",
+      "flags": [
+        "quantity",
+        "price",
+        "discount"
+      ],
+      "netDiff": 1257.32,
+      "quantityDiff": 30,
+      "packagesDiff": 0,
+      "dateDelta": 2,
+      "notes": [
+        "משקל: ספק 508, תאנה ורימון 538 (+30)",
+        "מחיר: ספק 2.5, תאנה ורימון 5",
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S7→T8",
+      "flags": [
+        "quantity",
+        "price",
+        "discount"
+      ],
+      "netDiff": -1245.96,
+      "quantityDiff": -30,
+      "packagesDiff": 0,
+      "dateDelta": 2,
+      "notes": [
+        "משקל: ספק 538, תאנה ורימון 508 (-30)",
+        "מחיר: ספק 5, תאנה ורימון 2.5",
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S4→T6",
+      "flags": [
+        "price",
+        "discount"
+      ],
+      "netDiff": 448.77,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "מחיר: ספק 7, תאנה ורימון 8",
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S11→T10",
+      "flags": [
+        "price",
+        "discount"
+      ],
+      "netDiff": -101.93,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 4.7, תאנה ורימון 4.5",
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S20→T21",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 15.62,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S28→T27",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 15.59,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 2,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S18→T16",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 14.04,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S27→T26",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 13.32,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S34→T31",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 12.01,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S30+S31→T29",
+      "flags": [
+        "discount",
+        "doc_ref"
+      ],
+      "netDiff": 11.66,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%",
+        "אסמכתא שונה: ספק 4329, תאנה ורימון 5899"
+      ]
+    },
+    {
+      "rows": "S2→T2",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 10.91,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S32+S33→T30",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 10.76,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S3→T3",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 10.74,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S29→T28",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 9.18,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S1→T1",
+      "flags": [
+        "discount",
+        "doc_ref"
+      ],
+      "netDiff": 9.04,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%",
+        "אסמכתא שונה: ספק 3948, תאנה ורימון 3260"
+      ]
+    },
+    {
+      "rows": "S16+S17→T17",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 8.71,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S19→T20",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 8.52,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S14→T14",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 8.12,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S22→T18",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 7.42,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S9→T9",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 7.4,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S5→T5",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 7.22,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S15→T15",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 7.17,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S24→T25",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 6.42,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S23→T22",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 6.38,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S6→T4",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 6.24,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S13→T11",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 5.64,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S26→T23",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 5.63,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S25→T24",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 5.53,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S21→T19",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 5.31,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S12→T12",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 4.97,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    },
+    {
+      "rows": "S10→T13",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": 3.93,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 12%, אצל תאנה ורימון 11.71%"
+      ]
+    }
+  ],
+  "supplierOnly": [],
+  "ownOnly": [],
+  "offset": {
+    "applies": false,
+    "groups": []
+  },
+  "dictionarySuggestions": [
+    "דימונד",
+    "רד",
+    "שלו"
+  ]
 }

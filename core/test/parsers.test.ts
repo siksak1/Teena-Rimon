@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { extractInvoices } from "../src/extract.js";
+import { detectScanned, extractInvoices } from "../src/extract.js";
 import { ExtractionError } from "../src/errors.js";
+import { confirmAmounts } from "../src/parsers/validate.js";
+import { supplierParsersFor } from "../src/parsers/registry.js";
+import { loadScan } from "../src/pdf/scan.js";
+import { parseDate, round2 } from "../src/pdf/text.js";
 import { extractSample, PAIRS, readSample, TEENA_RIMON } from "./helpers.js";
+import { NODE_SCAN_SUPPORT } from "./scanSupport.js";
 
 const sum = (xs: { lineTotal: number }[]) => Math.round(xs.reduce((a, x) => a + x.lineTotal, 0) * 100) / 100;
 
@@ -223,7 +228,18 @@ describe("Bananot Carmel parser", () => {
     expect(supplier.warnings).toEqual([]);
 
     expect(own.lines).toHaveLength(25);
-    expect(own.commercialDiscount).toBe(0);
+  });
+
+  it("applies the agreed 12% that neither Carmel nor the draft prints", async () => {
+    const { supplier, own } = await extractSample("carmel");
+    // Carmel prints 6.6 ₪/kg, already after the 12% — the list price is 7.5, as on the draft.
+    const line = supplier.lines.find((l) => l.date === "2026-09-13" && l.quantity === 504)!;
+    expect(line.discountPct).toBe(0.12);
+    expect(line.unitPrice).toBeCloseTo(7.5, 10);
+    expect(line.lineTotal).toBe(3326.4);
+    expect(own.discountPct).toBe(0.12);
+    expect(own.commercialDiscount).toBe(9514.24);
+    expect(own.warnings).toEqual([]);
   });
 
   it("carries the delivery date and number onto its rows, across the page break", async () => {
@@ -235,16 +251,166 @@ describe("Bananot Carmel parser", () => {
       description: "בננה אא' במגש",
       packages: 48,
       quantity: 524,
-      unitPrice: 5.45,
+      discountPct: 0.12,
       lineTotal: 2855.8,
     });
     expect(supplier.lines.find((l) => l.page === 2)).toMatchObject({ date: "2026-09-13", docNumber: "53400", quantity: 504 });
   });
 });
 
-describe("Har HaKor", () => {
-  it("is rejected as a scanned invoice", async () => {
-    await expect(extractSample("harKor")).rejects.toThrow("סרוקה");
+describe("Har HaKor (scanned, read by OCR)", () => {
+  // Transcribed by eye from the scan: date, delivery note, product as printed,
+  // packages, kg, price, total before the 12% discount.
+  const PRINTED = `
+    29/07/26 3948 ש לריאן 60 630 5.00 3150.00
+    04/08/26 3503 סמרסט 60 507 7.50 3802.50
+    05/08/26 3541 נ דורינא 46 480 7.80 3744.00
+    05/08/26 3541 סמרסט 60 497 7.00 3479.00
+    05/08/26 3541 ספדונה 60 629 4.00 2516.00
+    05/08/26 3541 ש בלאק דימו 45 483 4.50 2173.50
+    07/08/26 3650 סמרסט 60 538 5.00 2690.00
+    07/08/26 3650 שזיף 48 508 2.50 1270.00
+    09/08/26 3687 נ דורינא 60 516 5.00 2580.00
+    09/08/26 3687 קוסטיה 60 548 2.50 1370.00
+    09/08/26 3687 ש בלאק דימו 60 625 4.70 2937.50
+    09/08/26 3687 שזיף 36 385 4.50 1732.50
+    09/08/26 3687 שזיף 35 393 5.00 1965.00
+    10/08/26 3749 נ דורינא 60 566 5.00 2830.00
+    10/08/26 3749 סמרסט 60 500 5.00 2500.00
+    11/08/26 3791 נ דורינא 17 173 5.00 865.00
+    11/08/26 3791 נ פלברטופ 43 434 5.00 2170.00
+    11/08/26 3791 סמרסט 60 515 9.50 4892.50
+    12/08/26 3848 נ דורינא 60 594 5.00 2970.00
+    12/08/26 3848 סמרסט 60 605 9.00 5445.00
+    12/08/26 3848 ש בלאק דימו 60 617 3.00 1851.00
+    12/08/26 3848 ש לטיצה 48 517 5.00 2585.00
+    16/08/26 3963 נ דורינא 60 556 4.00 2224.00
+    16/08/26 3963 קוסטיה 60 559 4.00 2236.00
+    16/08/26 3963 ש בלאק דימו 60 643 3.00 1929.00
+    16/08/26 3963 שזיף 48 491 4.00 1964.00
+    18/08/26 4070 אפרסק 188 52 516 9.00 4644.00
+    21/08/26 4204 1881 60 679 8.00 5432.00
+    23/08/26 4261 נ דורינא 60 582 5.50 3201.00
+    25/08/26 4329 1881 39 326 8.00 2608.00
+    25/08/26 4329 אפרסק שלו 21 182 8.00 1456.00
+    26/08/26 4391 1881 21 180 7.30 1314.00
+    26/08/26 4391 אפרסק 188 39 334 7.30 2438.20
+    27/08/26 4453 1881 63 558 7.50 4185.00`
+    .trim()
+    .split("\n")
+    .map((line) => {
+      const [date, doc, ...rest] = line.trim().split(" ");
+      const [packages, kg, price, total] = rest.splice(-4).map(Number);
+      return { date: parseDate(date), doc, product: rest.join(" "), packages, kg, price, total };
+    });
+
+  it("reads every row of the scan exactly", async () => {
+    const { supplier } = await extractSample("harKor");
+    expect(supplier.lines.map((l) => [l.date, l.docNumber, l.packages, l.quantity, l.unitPrice, round2(l.quantity * l.unitPrice)])).toEqual(
+      PRINTED.map((r) => [r.date, r.doc, r.packages, r.kg, r.price, r.total]),
+    );
+    expect(supplier.lines.filter((l) => l.ocrUncertain)).toEqual([]);
+    expect(supplier.lines.at(-1)!.page).toBe(2);
+  });
+
+  it("spells out Har-Kor's short product names", async () => {
+    const { supplier } = await extractSample("harKor");
+    const names = Object.fromEntries(PRINTED.map((r, i) => [r.product, supplier.lines[i].description]));
+    expect(names).toEqual({
+      "ש לריאן": "שזיף לריאן",
+      סמרסט: "אפרסק סמרסט",
+      "נ דורינא": "נקטרינה דורינה",
+      ספדונה: "אגס ספדונה",
+      "ש בלאק דימו": "שזיף בלאק דיימונד",
+      שזיף: "שזיף",
+      קוסטיה: "אגס קוסטיה",
+      "נ פלברטופ": "נקטרינה פלברטופ",
+      "ש לטיצה": "שזיף לטיציה",
+      "אפרסק 188": "אפרסק 188",
+      "1881": "אפרסק 1881",
+      "אפרסק שלו": "אפרסק שלו",
+    });
+  });
+
+  it("reads the header and the footer, and everything adds up", async () => {
+    const { supplier, own } = await extractSample("harKor");
+    expect(supplier).toMatchObject({
+      supplierId: "har-kor",
+      invoiceNumber: "111081",
+      invoiceDate: "2026-08-31",
+      scanned: true,
+      // 93,149.70 less the 12% discount of 11,177.96
+      printedItemsTotal: 81971.74,
+      warnings: [],
+    });
+    expect(supplier.lines.every((l) => l.discountPct === 0.12)).toBe(true);
+    expect(round2(supplier.lines.reduce((s, l) => s + l.quantity, 0))).toBe(16866);
+    expect(supplier.lines.reduce((s, l) => s + (l.packages ?? 0), 0)).toBe(1741);
+    // The draft is issued against this invoice: no mismatch warning.
+    expect(own.againstInvoice).toBe("111081");
+    expect(own.warnings.filter((w) => w.includes("111081"))).toEqual([]);
+  });
+
+  it("finds the supplier by OCR when the scan has no text layer", async () => {
+    const pdf = await readSample(PAIRS.harKor.supplier);
+    const pages = () => NODE_SCAN_SUPPORT.jbig2Wasm().then((wasm) => loadScan(pdf, { "jbig2.wasm": wasm }));
+    const parser = await detectScanned(supplierParsersFor(TEENA_RIMON), pages, NODE_SCAN_SUPPORT);
+    expect(parser?.id).toBe("har-kor");
+  });
+
+  it("is rejected without scan support, naming the reason", async () => {
+    const pair = PAIRS.harKor;
+    const input = { ownPdf: await readSample(pair.own), supplierPdf: await readSample(pair.supplier), ownFileName: pair.own, supplierFileName: pair.supplier };
+    await expect(extractInvoices(input, TEENA_RIMON)).rejects.toThrow("סרוקה");
+  });
+});
+
+describe("confirmAmounts (OCR misreads)", () => {
+  const rows = [
+    { quantity: 630, unitPrice: 5, total: 3150 },
+    { quantity: 507, unitPrice: 7.5, total: 3802.5 },
+    { quantity: 480, unitPrice: 7.8, total: 3744 },
+  ];
+  const printed = { quantity: 1617, total: 10696.5 };
+
+  it("leaves rows that check out alone", () => {
+    expect(confirmAmounts(rows, printed).map((r) => [r.corrected, r.uncertain])).toEqual([[[], []], [[], []], [[], []]]);
+  });
+
+  it("corrects a misread weight when the printed totals prove it", () => {
+    const read = rows.map((r) => ({ ...r }));
+    read[1].quantity = 501; // 507 misread
+    const [, fixed] = confirmAmounts(read, printed);
+    expect(fixed).toMatchObject({ quantity: 507, corrected: ["quantity"], uncertain: [] });
+  });
+
+  it("corrects a misread total, and fills in an amount the OCR missed", () => {
+    const read = rows.map((r) => ({ ...r })) as { quantity: number | null; unitPrice: number | null; total: number | null }[];
+    read[0].total = 3750; // 3150 misread
+    read[2].unitPrice = null;
+    const result = confirmAmounts(read, printed);
+    expect(result[0]).toMatchObject({ total: 3150, corrected: ["total"] });
+    expect(result[2]).toMatchObject({ unitPrice: 7.8, corrected: ["unitPrice"] });
+  });
+
+  it("corrects a misread price: weight and total are confirmed by the footer", () => {
+    const read = rows.map((r) => ({ ...r }));
+    read[2].unitPrice = 1.8;
+    expect(confirmAmounts(read, printed)[2]).toMatchObject({ unitPrice: 7.8, corrected: ["unitPrice"] });
+  });
+
+  it("marks a row uncertain instead of guessing when two amounts are wrong", () => {
+    const read = rows.map((r) => ({ ...r }));
+    read[1] = { quantity: 501, unitPrice: 7.5, total: 3302.5 };
+    const result = confirmAmounts(read, printed);
+    expect(result[1]).toMatchObject({ quantity: 501, total: 3302.5, corrected: [], uncertain: ["quantity", "unitPrice", "total"] });
+    expect(result[0].uncertain).toEqual([]);
+  });
+
+  it("marks failing rows uncertain when no total is printed to check against", () => {
+    const read = rows.map((r) => ({ ...r }));
+    read[1].quantity = 501;
+    expect(confirmAmounts(read, { quantity: null, total: 10696.5 })[1].uncertain).toEqual(["quantity", "unitPrice", "total"]);
   });
 });
 

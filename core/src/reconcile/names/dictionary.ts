@@ -53,6 +53,7 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     "דלעת",
     "כרוב",
     "קישוא",
+    "אגס",
   ],
   familyAliases: {
     ענבים: "ענב",
@@ -92,6 +93,18 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     // Cherry tomatoes
     ליקופן: { family: "שרי" },
     לובלו: { family: "שרי" },
+    // Stone fruit and pears (Har-Kor). 1881 and 188 are Har-Kor's peach
+    // cultivar codes — without these entries they would read as sizes.
+    סמרסט: { family: "אפרסק" },
+    "1881": { family: "אפרסק" },
+    "188": { family: "אפרסק" },
+    דורינה: { family: "נקטרינה" },
+    פלברטופ: { family: "נקטרינה" },
+    לריאן: { family: "שזיף" },
+    "בלאק דיימונד": { family: "שזיף" },
+    לטיציה: { family: "שזיף" },
+    ספדונה: { family: "אגס" },
+    קוסטיה: { family: "אגס" },
   },
   colors: {
     אדום: "אדום",

@@ -1,4 +1,4 @@
-import type { GapFlag } from "@core/model.js";
+import type { GapFlag, OwnLine, SupplierLine } from "@core/model.js";
 
 const moneyFmt = new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 2 });
 const numberFmt = new Intl.NumberFormat("he-IL", { maximumFractionDigits: 3 });
@@ -41,3 +41,43 @@ export const FLAG_LABEL: Record<GapFlag, string> = {
   doc_ref: "אסמכתא",
   arithmetic: "חישוב שורה",
 };
+
+export function supplierRef(l: SupplierLine): string {
+  return [l.bookRef, l.docNumber].filter(Boolean).join(" · ");
+}
+
+export function supplierItem(l: SupplierLine): string {
+  return [l.description, l.variety].filter(Boolean).join(" · ");
+}
+
+/** Scanned invoices: marks a row whose OCR could not be confirmed. */
+export const OCR_MARK = "⚠ לבדיקה";
+
+const OCR_FIELDS: Partial<Record<keyof SupplierLine, string>> = {
+  date: "תאריך",
+  docNumber: "תעודה",
+  description: "פריט",
+  packages: "אריזות",
+  quantity: 'ק"ג',
+  unitPrice: "מחיר",
+  lineTotal: 'סה"כ',
+};
+
+/** "ק"ג, מחיר, סה"כ" — the fields to check against the scan; "" when the row was confirmed. */
+export function ocrUncertainFields(l: SupplierLine): string {
+  return (l.ocrUncertain ?? []).map((f) => OCR_FIELDS[f] ?? f).join(", ");
+}
+
+/** The item, followed by the OCR mark when the row needs checking (plain text: tables and Excel). */
+export function supplierItemMarked(l: SupplierLine): string {
+  return l.ocrUncertain ? `${supplierItem(l)} ${OCR_MARK}` : supplierItem(l);
+}
+
+export function ownItem(l: OwnLine): string {
+  return [l.product, l.size].filter(Boolean).join(" · ");
+}
+
+/** Own lines are printed before the commercial discount; this is the comparable net. */
+export function ownNet(l: OwnLine, ownDiscountPct: number): number {
+  return Math.round(l.lineTotal * (1 - ownDiscountPct) * 100) / 100;
+}

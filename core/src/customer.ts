@@ -62,6 +62,12 @@ export const customerConfigSchema = z.strictObject({
   referenceRules: z.array(referenceRule).min(1),
   tolerances,
   /**
+   * Agreed discount rates (e.g. `{ "carmel": 0.12 }`) for suppliers whose documents
+   * print none: the supplier's prices are already discounted, and the own
+   * document carries no "הנחה מסחרית". Keyed by supplier parser id.
+   */
+  unprintedDiscounts: z.record(z.string(), z.number().gt(0).lt(1)).optional(),
+  /**
    * "invoice-wide": when the net item totals are equal, price/weight gaps are
    * shown as offsetting each other. "off": every gap stays in the main table.
    */

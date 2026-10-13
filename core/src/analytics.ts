@@ -1,6 +1,6 @@
 import type { CustomerConfig } from "./customer.js";
 import type { ExtractionErrorCode } from "./errors.js";
-import type { ReconciliationResult } from "./model.js";
+import type { ExtractionResult, ReconciliationResult } from "./model.js";
 
 /**
  * Usage analytics: counts only. Everything sent is built here, from numbers
@@ -31,6 +31,10 @@ export type CompletedProperties = {
   /** Only when the customer's config opts in; |net gap| rounded to ₪10. */
   discrepancy_amount_nis?: number;
   offset_applied: boolean;
+  /** The supplier invoice was a scan, read by OCR. */
+  supplier_scanned: boolean;
+  /** Scanned invoices: rows whose OCR could not be confirmed (0 otherwise). */
+  ocr_uncertain_lines: number;
   parser_warnings: number;
   parse_ms: number;
   reconcile_ms: number;
@@ -51,7 +55,7 @@ export type AnalyticsEvent =
 export function completedEvent(
   ctx: AnalyticsContext,
   result: ReconciliationResult,
-  lines: { supplier: number; own: number },
+  lines: { supplier: number; own: number; scanned: boolean; ocrUncertain: number },
   timings: { parseMs: number; reconcileMs: number },
 ): AnalyticsEvent {
   const properties: CompletedProperties = {
@@ -63,6 +67,8 @@ export function completedEvent(
     unmatched_supplier: result.supplierOnly.length,
     unmatched_own: result.ownOnly.length,
     offset_applied: result.offset.applies,
+    supplier_scanned: lines.scanned,
+    ocr_uncertain_lines: lines.ocrUncertain,
     parser_warnings: result.warnings.length,
     parse_ms: Math.round(timings.parseMs),
     reconcile_ms: Math.round(timings.reconcileMs),
@@ -71,6 +77,17 @@ export function completedEvent(
     properties.discrepancy_amount_nis = Math.round(Math.abs(result.totals.diff) / 10) * 10;
   }
   return { event: "reconciliation_completed", properties };
+}
+
+/** The line counts `completedEvent` reports, from an extraction. */
+export function lineCounts(extraction: ExtractionResult) {
+  const { supplier, own } = extraction;
+  return {
+    supplier: supplier.lines.length,
+    own: own.lines.length,
+    scanned: supplier.scanned === true,
+    ocrUncertain: supplier.lines.filter((l) => l.ocrUncertain).length,
+  };
 }
 
 export function failedEvent(ctx: AnalyticsContext, code: ExtractionErrorCode | "INTERNAL"): AnalyticsEvent {

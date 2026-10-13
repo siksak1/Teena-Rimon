@@ -10,7 +10,7 @@ import {
   type PdfDocument,
 } from "../pdf/layout.js";
 import { parseDate, parseNumber, parsePercent, round2 } from "../pdf/text.js";
-import type { SupplierParser } from "./types.js";
+import type { TextSupplierParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
 type Key =
@@ -44,7 +44,7 @@ const COLUMNS: ColumnSpec<Key>[] = [
  * discount. Pallet-deposit rows ("פקדון משטח") have no delivery number and
  * are left out. The footer starts at "מחיר כולל" (items + deposits).
  */
-export const haklaimParser: SupplierParser = {
+export const haklaimParser: TextSupplierParser = {
   id: "haklaim",
   displayName: "החקלאים",
 

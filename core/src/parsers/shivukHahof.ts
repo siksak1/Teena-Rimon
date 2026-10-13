@@ -8,7 +8,7 @@ import {
   type PdfDocument,
 } from "../pdf/layout.js";
 import { parseDate, parseNumber, parsePercent, round2 } from "../pdf/text.js";
-import type { SupplierParser } from "./types.js";
+import type { TextSupplierParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
 type Key =
@@ -40,7 +40,7 @@ const COLUMNS: ColumnSpec<Key>[] = [
  * omitted when it repeats); subtotal rows start with `סה"כ`. A line without
  * a discount has an empty discount cell. The "שונות" table (pallets) is ignored.
  */
-export const shivukHahofParser: SupplierParser = {
+export const shivukHahofParser: TextSupplierParser = {
   id: "shivuk-hahof",
   displayName: "שיווק החוף",
 

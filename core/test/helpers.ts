@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { type CustomerConfig, parseCustomerConfig } from "../src/customer.js";
 import { extractInvoices } from "../src/extract.js";
 import type { ExtractionResult } from "../src/model.js";
+import { NODE_SCAN_SUPPORT } from "./scanSupport.js";
 
 const REPO = new URL("../../", import.meta.url);
 
@@ -40,6 +41,7 @@ export async function extractCase(pair: FixtureCase, config: CustomerConfig): Pr
       supplierFileName: pair.supplier,
     },
     config,
+    NODE_SCAN_SUPPORT,
   );
 }
 
