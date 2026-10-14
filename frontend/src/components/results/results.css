@@ -197,7 +197,7 @@
 
 .rec-table th,
 .rec-table td {
-  padding: 0.5rem 0.7rem;
+  padding: 0.5rem 0.55rem;
   text-align: start;
   white-space: nowrap;
   vertical-align: top;
@@ -221,7 +221,7 @@
 
 .filter-row input {
   width: 100%;
-  min-width: 4.5rem;
+  min-width: 3rem;
   padding: 0.25rem 0.45rem;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -246,6 +246,11 @@
 .rec-table td.name {
   white-space: normal;
   min-width: 12rem;
+}
+
+.rec-table td.grower {
+  white-space: normal;
+  min-width: 6rem;
 }
 
 .rec-table .mono {

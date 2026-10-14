@@ -8,6 +8,7 @@ import { granotParser } from "./granot.js";
 import { haklaimParser } from "./haklaim.js";
 import { harKorParser } from "./harKor.js";
 import { hasorParser } from "./hasor.js";
+import { leviParser } from "./levi.js";
 import { shivukHahofParser } from "./shivukHahof.js";
 import type { OwnDocumentParser, SupplierParser } from "./types.js";
 
@@ -25,6 +26,7 @@ export const SUPPLIER_PARSERS: SupplierParser[] = [
   carmelParser,
   hasorParser,
   harKorParser,
+  leviParser,
 ];
 
 /** Suppliers we recognise but cannot parse, with the reason shown to the user. */

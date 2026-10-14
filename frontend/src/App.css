@@ -2,7 +2,7 @@
   /* Ink teal + warm brass — finance tool, not purple/cream */
   --ink: #0b1f24;
   --ink-soft: #143038;
-  --panel: rgba(248, 250, 248, 0.92);
+  --panel: rgba(255, 255, 255, 0.92);
   --panel-solid: #f4f7f5;
   --line: rgba(11, 31, 36, 0.12);
   --text: #0f2429;
@@ -20,7 +20,7 @@
   --miss: #5b6470;
   --miss-soft: rgba(91, 100, 112, 0.12);
   --radius: 18px;
-  --shadow: 0 24px 60px rgba(7, 22, 26, 0.18);
+  --shadow: 0 18px 48px rgba(7, 22, 26, 0.08);
   --font-display: "Rubik", "Segoe UI", sans-serif;
   --font-body: "Heebo", "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -42,7 +42,7 @@ body {
   margin: 0;
   color: var(--text);
   font-family: var(--font-body);
-  background: var(--ink);
+  background: #eef3f1;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -63,9 +63,9 @@ input {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(31, 111, 120, 0.45), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(184, 107, 42, 0.28), transparent 50%),
-    linear-gradient(165deg, #071417 0%, #0d242b 45%, #122f36 100%);
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(31, 111, 120, 0.16), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(184, 107, 42, 0.12), transparent 50%),
+    linear-gradient(165deg, #f6f9f8 0%, #eef3f1 45%, #e6eeeb 100%);
 }
 
 .atmosphere::after {
@@ -74,8 +74,8 @@ input {
   inset: 0;
   opacity: 0.35;
   background-image:
-    linear-gradient(rgba(248, 250, 248, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(248, 250, 248, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(11, 31, 36, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 31, 36, 0.05) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
   animation: grid-drift 28s linear infinite;
@@ -96,7 +96,7 @@ input {
   justify-content: space-between;
   gap: 1rem;
   padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
-  color: #e7f0ef;
+  color: var(--ink);
 }
 
 .brand {
@@ -141,7 +141,7 @@ input {
   font-size: 0.78rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(231, 240, 239, 0.65);
+  color: var(--muted);
 }
 
 .brand-bar__note {
@@ -149,7 +149,7 @@ input {
   max-width: 18rem;
   text-align: end;
   font-size: 0.85rem;
-  color: rgba(231, 240, 239, 0.62);
+  color: var(--muted);
 }
 
 .shell {
@@ -157,11 +157,16 @@ input {
   margin: 0 auto 3rem;
   padding: clamp(1.5rem, 3vw, 2.25rem);
   background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--line);
   border-radius: calc(var(--radius) + 6px);
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
   animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Results tables need the room; the upload step keeps the narrower frame. */
+.shell:has(.results) {
+  width: min(1440px, calc(100% - 2rem));
 }
 
 @keyframes rise-in {
@@ -194,6 +199,49 @@ input {
   color: var(--muted);
   line-height: 1.55;
   font-size: 1.02rem;
+}
+
+.mode-switch {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.mode-switch__option {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.mode-switch__option:hover:not(:disabled):not(.is-on) {
+  color: var(--text);
+}
+
+.mode-switch__option.is-on {
+  background: var(--ink);
+  color: #f4f7f5;
+}
+
+.mode-switch__option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mode-switch__option:focus-visible {
+  outline: 2px solid var(--ours);
+  outline-offset: 2px;
 }
 
 .upload-grid {
@@ -439,7 +487,7 @@ input {
   gap: 1rem;
   width: min(1120px, calc(100% - 2rem));
   margin: 0 auto 2rem;
-  color: rgba(231, 240, 239, 0.55);
+  color: var(--muted);
   font-size: 0.8rem;
 }
 

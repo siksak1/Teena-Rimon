@@ -1,7 +1,7 @@
 import type { ExtractionResult, MatchGroup, OwnLine, ReconciliationResult, SupplierLine } from "@core/model.js";
 import customer from "@customer-config";
 import writeXlsxFile, { type Cell, type Row, type Sheet } from "write-excel-file/browser";
-import { FLAG_LABEL, ownItem, ownNet, supplierItemMarked, supplierRef } from "./format";
+import { FLAG_LABEL, ownItem, ownNet, shownDateDelta, supplierItemMarked, supplierRef } from "./format";
 
 const MONEY = "#,##0.00";
 const SIGNED_MONEY = "+#,##0.00;-#,##0.00;0";
@@ -46,12 +46,16 @@ const GROUP_HEADERS = [
 ];
 const GROUP_WIDTHS = [8, 10, 10, 20, 32, 9, 10, 9, 8, 12, 18, 50, 11, 10, 10, 12];
 
+/** Excel reports cover many growers: a grower column after the side. */
+const withGrower = <T>(row: T[], grower: T): T[] => [row[0], row[1], grower, ...row.slice(2)];
+
 /** Each line of each group, then a summary row with the group's status and differences. */
-function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
-  const rows: Row[] = [header(GROUP_HEADERS)];
+function groupRows(groups: MatchGroup[], ownDiscountPct: number, growers: boolean): Row[] {
+  const rows: Row[] = [header(growers ? withGrower(GROUP_HEADERS, "מגדל") : GROUP_HEADERS)];
+  const push = (row: Row, grower: string | undefined) => rows.push(growers ? withGrower(row, text(grower ?? null)) : row);
   for (const g of groups) {
     for (const l of g.supplierLines) {
-      rows.push([
+      push([
         g.id,
         "ספק",
         date(l.date),
@@ -62,10 +66,10 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
         number(l.unitPrice),
         number(l.discountPct, PERCENT),
         number(l.lineTotal, MONEY),
-      ]);
+      ], l.grower);
     }
     for (const l of g.ownLines) {
-      rows.push([
+      push([
         g.id,
         customer.shortName,
         date(l.date),
@@ -76,7 +80,7 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
         number(l.unitPrice),
         number(ownDiscountPct, PERCENT),
         number(ownNet(l, ownDiscountPct), MONEY),
-      ]);
+      ], l.grower);
     }
     const fill = g.netDiff !== 0 ? "#FBE9E7" : g.flags.length ? "#FFF6E5" : "#EAF5EE";
     const cell = (value?: string | number | null, format?: string): Cell => ({
@@ -90,19 +94,35 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
     rows.push([
       cell(g.id),
       cell("סיכום קבוצה"),
-      ...Array.from({ length: 8 }, () => cell()),
+      ...Array.from({ length: growers ? 9 : 8 }, () => cell()),
       cell(g.flags.length ? g.flags.map((f) => FLAG_LABEL[f]).join(", ") : "תואם"),
       cell(g.notes.join("\n")),
       cell(g.packagesDiff || null, SIGNED_NUM),
       cell(g.quantityDiff || null, SIGNED_NUM),
-      cell(g.dateDelta || null, SIGNED_NUM),
+      cell(shownDateDelta(g.dateDelta), SIGNED_NUM),
       cell(g.netDiff, SIGNED_MONEY),
     ]);
   }
   return rows;
 }
 
-function supplierOnlyRows(lines: SupplierLine[]): Row[] {
+function supplierOnlyRows(lines: SupplierLine[], excel: boolean): Row[] {
+  if (excel) {
+    return [
+      header(["שורה", "תאריך", "מגדל", "תעודה", "פריט", "אריזות", 'ק"ג', "מחיר", 'סה"כ']),
+      ...lines.map((l): Row => [
+        l.id,
+        date(l.date),
+        text(l.grower ?? null),
+        text(l.docNumber),
+        supplierItemMarked(l),
+        number(l.packages),
+        number(l.quantity),
+        number(l.unitPrice),
+        number(l.lineTotal, MONEY),
+      ]),
+    ];
+  }
   return [
     header(["שורה", "תאריך", "תעודה", "פנקס", "פריט", "אריזות", 'ק"ג', "מחיר", "הנחה", 'סה"כ נטו']),
     ...lines.map((l): Row => [
@@ -120,7 +140,22 @@ function supplierOnlyRows(lines: SupplierLine[]): Row[] {
   ];
 }
 
-function ownOnlyRows(lines: OwnLine[]): Row[] {
+function ownOnlyRows(lines: OwnLine[], excel: boolean): Row[] {
+  if (excel) {
+    return [
+      header(["שורה", "תאריך", "מגדל", "אסמכתא", "פריט", 'ק"ג', "מחיר", 'סה"כ']),
+      ...lines.map((l): Row => [
+        l.id,
+        date(l.date),
+        text(l.grower ?? null),
+        text(l.supplierRef),
+        ownItem(l),
+        number(l.quantity),
+        number(l.unitPrice),
+        number(l.lineTotal, MONEY),
+      ]),
+    ];
+  }
   return [
     header(["שורה", "תאריך", `מסמך ${customer.shortName}`, "אסמכתא", "פריט", "אריזות", 'ק"ג', "מחיר", "סכום (לפני הנחה)"]),
     ...lines.map((l): Row => [
@@ -142,17 +177,29 @@ function summaryRows(extraction: ExtractionResult, result: ReconciliationResult,
   const { totals } = result;
   const ownName = customer.displayName;
   const label = (value: string): Cell => ({ value, fontWeight: "bold" });
+  const head: Row[] =
+    extraction.meta.format === "excel"
+      ? [
+          [label("דוח ספק"), extraction.meta.supplierFileName],
+          [label(`דוח ${ownName}`), extraction.meta.ownFileName],
+          [],
+          [label('ספק — סה"כ (ק"ג × מחיר)'), number(totals.supplierNet, MONEY)],
+          [label(`${ownName} — סה"כ (ק"ג × מחיר)`), number(totals.ownNet, MONEY)],
+        ]
+      : [
+          [label("ספק"), supplier.supplierName],
+          [label("חשבונית ספק"), supplier.invoiceNumber],
+          [label("תאריך חשבונית"), date(supplier.invoiceDate)],
+          [label(`מסמך ${ownName}`), own.documentNumber],
+          [label("כנגד חשבונית"), text(own.againstInvoice)],
+          [],
+          [label('ספק — סה"כ פריטים נטו'), number(totals.supplierNet, MONEY)],
+          [label(`${ownName} — סה"כ לפני הנחה`), number(totals.ownGross, MONEY)],
+          [label(`${ownName} — הנחה מסחרית`), number(totals.ownDiscountPct, PERCENT)],
+          [label(`${ownName} — סה"כ נטו`), number(totals.ownNet, MONEY)],
+        ];
   return [
-    [label("ספק"), supplier.supplierName],
-    [label("חשבונית ספק"), supplier.invoiceNumber],
-    [label("תאריך חשבונית"), date(supplier.invoiceDate)],
-    [label(`מסמך ${ownName}`), own.documentNumber],
-    [label("כנגד חשבונית"), text(own.againstInvoice)],
-    [],
-    [label('ספק — סה"כ פריטים נטו'), number(totals.supplierNet, MONEY)],
-    [label(`${ownName} — סה"כ לפני הנחה`), number(totals.ownGross, MONEY)],
-    [label(`${ownName} — הנחה מסחרית`), number(totals.ownDiscountPct, PERCENT)],
-    [label(`${ownName} — סה"כ נטו`), number(totals.ownNet, MONEY)],
+    ...head,
     [label(`פער (${ownName} פחות ספק)`), number(totals.diff, SIGNED_MONEY)],
     [],
     [label("קבוצות שהוצמדו"), result.groups.length],
@@ -168,19 +215,31 @@ function summaryRows(extraction: ExtractionResult, result: ReconciliationResult,
 /** Writes the whole comparison — every table, regardless of what is collapsed or filtered on screen. */
 export async function exportReconciliation(extraction: ExtractionResult, result: ReconciliationResult): Promise<void> {
   const ownDiscountPct = result.totals.ownDiscountPct;
+  const excel = extraction.meta.format === "excel";
+  const groupWidths = excel ? withGrower(GROUP_WIDTHS, 18) : GROUP_WIDTHS;
   const offsetIds = new Set(result.offset.groups.map((g) => g.id));
   const mainGroups = result.groups.filter((g) => !offsetIds.has(g.id));
 
   const sheets = [
     sheet("סיכום", summaryRows(extraction, result, mainGroups), [30, 40]),
-    sheet("שורות שהוצמדו", groupRows(mainGroups, ownDiscountPct), GROUP_WIDTHS),
-    sheet("רק אצל הספק", supplierOnlyRows(result.supplierOnly), [8, 10, 14, 12, 32, 9, 10, 9, 8, 12]),
-    sheet(`רק אצל ${customer.shortName}`, ownOnlyRows(result.ownOnly), [8, 10, 12, 14, 32, 9, 10, 9, 16]),
+    sheet("שורות שהוצמדו", groupRows(mainGroups, ownDiscountPct, excel), groupWidths),
+    sheet(
+      "רק אצל הספק",
+      supplierOnlyRows(result.supplierOnly, excel),
+      excel ? [8, 10, 18, 12, 32, 9, 10, 9, 12] : [8, 10, 14, 12, 32, 9, 10, 9, 8, 12],
+    ),
+    sheet(
+      `רק אצל ${customer.shortName}`,
+      ownOnlyRows(result.ownOnly, excel),
+      excel ? [8, 10, 18, 12, 32, 10, 9, 12] : [8, 10, 12, 14, 32, 9, 10, 9, 16],
+    ),
   ];
   if (result.offset.applies && result.offset.groups.length) {
-    sheets.push(sheet("קיזוז", groupRows(result.offset.groups, ownDiscountPct), GROUP_WIDTHS));
+    sheets.push(sheet("קיזוז", groupRows(result.offset.groups, ownDiscountPct, excel), groupWidths));
   }
 
-  const name = `התאמה - ${extraction.supplier.supplierName} - ${extraction.supplier.invoiceNumber}`;
+  const name = excel
+    ? `התאמה - דוחות אקסל - ${extraction.meta.supplierFileName.replace(/\.xlsx$/i, "")}`
+    : `התאמה - ${extraction.supplier.supplierName} - ${extraction.supplier.invoiceNumber}`;
   await writeXlsxFile(sheets).toFile(`${name.replace(/[\\/:*?"<>|]/g, "_")}.xlsx`);
 }

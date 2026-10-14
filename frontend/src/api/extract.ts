@@ -45,10 +45,35 @@ export async function extractInvoices(
       browserScanSupport(onScanProgress),
     );
   } catch (err) {
-    // Matched by name: the class lives in the lazily loaded chunk.
-    if (err instanceof Error && err.name === "ExtractionError") {
-      throw new ExtractError(err.message, (err as ExtractionError).code);
-    }
-    throw err;
+    throw asExtractError(err);
   }
+}
+
+/**
+ * Read the two Excel reports (supplier sales, own weighings) in this tab.
+ * The spreadsheet reader is loaded only when Excel mode is used.
+ */
+export async function extractExcelReports(ownFile: File, supplierFile: File): Promise<ExtractionResult> {
+  const { extractExcel } = await import("@core/excel/extract.js");
+  try {
+    return await extractExcel(
+      {
+        ownXlsx: new Uint8Array(await ownFile.arrayBuffer()),
+        supplierXlsx: new Uint8Array(await supplierFile.arrayBuffer()),
+        ownFileName: ownFile.name,
+        supplierFileName: supplierFile.name,
+      },
+      customer,
+    );
+  } catch (err) {
+    throw asExtractError(err);
+  }
+}
+
+function asExtractError(err: unknown): unknown {
+  // Matched by name: the class lives in the lazily loaded chunk.
+  if (err instanceof Error && err.name === "ExtractionError") {
+    return new ExtractError(err.message, (err as ExtractionError).code);
+  }
+  return err;
 }

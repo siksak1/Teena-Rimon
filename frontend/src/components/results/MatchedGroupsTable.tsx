@@ -12,6 +12,7 @@ import {
   shortDate,
   signedMoney,
   signedNum,
+  shownDateDelta,
   OCR_MARK,
   ocrUncertainFields,
   supplierItem,
@@ -24,9 +25,13 @@ type Props = {
   ownDiscountPct: number;
   /** Groups shown in the offset section get a neutral tone. */
   tone?: "default" | "offset";
+  /** Excel reports: a grower column (each report covers many growers). */
+  growers?: boolean;
 };
 
 const HEADERS = ["קבוצה", "צד", "תאריך", "תעודה / אסמכתא", "פריט", "אריזות", 'ק"ג', "מחיר", 'סה"כ נטו'];
+/** Excel reports carry no discount: the amount is just weight × price. */
+const GROWER_HEADERS = ["קבוצה", "צד", "מגדל", ...HEADERS.slice(2, -1), 'סה"כ'];
 
 function groupTone(g: MatchGroup, tone: Props["tone"]): string {
   if (tone === "offset") return "grp-offset";
@@ -38,11 +43,13 @@ function groupTone(g: MatchGroup, tone: Props["tone"]): string {
 const openByDefault = (g: MatchGroup) => g.netDiff !== 0 || g.supplierLines.some((l) => l.ocrUncertain);
 
 /** The text of each line as shown in the table, one entry per column, for the column filters. */
-function lineCells(g: MatchGroup, ownDiscountPct: number): string[][] {
+function lineCells(g: MatchGroup, ownDiscountPct: number, growers: boolean): string[][] {
+  const grower = (l: { grower?: string }) => (growers ? [l.grower ?? ""] : []);
   return [
     ...g.supplierLines.map((l) => [
       g.id,
       "ספק",
+      ...grower(l),
       shortDate(l.date),
       supplierRef(l),
       supplierItemMarked(l),
@@ -54,6 +61,7 @@ function lineCells(g: MatchGroup, ownDiscountPct: number): string[][] {
     ...g.ownLines.map((l) => [
       g.id,
       customer.shortName,
+      ...grower(l),
       shortDate(l.date),
       l.supplierRef || "—",
       ownItem(l),
@@ -84,7 +92,7 @@ function DiffCells({ g }: { g: MatchGroup }) {
     <>
       <td className="mono">{g.packagesDiff ? signedNum(g.packagesDiff) : ""}</td>
       <td className="mono">{g.quantityDiff ? signedNum(g.quantityDiff) : ""}</td>
-      <td className="muted">{g.dateDelta ? `${signedNum(g.dateDelta)} ימים` : ""}</td>
+      <td className="muted">{shownDateDelta(g.dateDelta) ? `${signedNum(g.dateDelta)} ימים` : ""}</td>
       <td className={`mono ${g.netDiff !== 0 ? "is-hot" : ""}`}>{signedMoney(g.netDiff)}</td>
     </>
   );
@@ -95,8 +103,11 @@ function DiffCells({ g }: { g: MatchGroup }) {
  * summary row with the differences and the reasons. Groups without a money
  * difference start collapsed to a single summary row.
  */
-export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }: Props) {
-  const filters = useColumnFilters(HEADERS.length);
+export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", growers = false }: Props) {
+  const headers = growers ? GROWER_HEADERS : HEADERS;
+  /** Columns between the side tag and the numbers: [grower,] date, reference, item. */
+  const labelSpan = growers ? 5 : 4;
+  const filters = useColumnFilters(headers.length);
   /** Groups the user opened or closed, relative to their default. */
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const isOpen = (g: MatchGroup) => openByDefault(g) !== toggled.has(g.id);
@@ -110,7 +121,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }:
     setToggled(new Set(groups.filter((g) => openByDefault(g) !== open).map((g) => g.id)));
 
   const visible = filters.active
-    ? groups.filter((g) => lineCells(g, ownDiscountPct).some((cells) => rowMatches(cells, filters.values)))
+    ? groups.filter((g) => lineCells(g, ownDiscountPct, growers).some((cells) => rowMatches(cells, filters.values)))
     : groups;
 
   return (
@@ -126,7 +137,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }:
       </div>
       <div className="table-wrap">
         <table className="rec-table">
-          <FilterableHead headers={HEADERS} filters={filters} />
+          <FilterableHead headers={headers} filters={filters} />
           {visible.map((g) => {
             const open = isOpen(g);
             const toggleButton = (
@@ -150,7 +161,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }:
                       {toggleButton}
                       {g.id}
                     </td>
-                    <td colSpan={4}>
+                    <td colSpan={labelSpan}>
                       <div className="grp-brief">
                         <GroupStatus g={g} />
                         <span className="grp-brief__items">{items.join(" · ")}</span>
@@ -179,6 +190,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }:
                     <td>
                       <span className="side-tag side-tag--supplier">ספק</span>
                     </td>
+                    {growers && <td className="grower">{l.grower}</td>}
                     <td>{shortDate(l.date)}</td>
                     <td className="mono">{supplierRef(l)}</td>
                     <td className="name">
@@ -203,6 +215,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }:
                     <td>
                       <span className="side-tag side-tag--tr">{customer.shortName}</span>
                     </td>
+                    {growers && <td className="grower">{l.grower}</td>}
                     <td>{shortDate(l.date)}</td>
                     <td className="mono">{l.supplierRef || "—"}</td>
                     <td className="name">{ownItem(l)}</td>
@@ -213,7 +226,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }:
                   </tr>
                 ))}
                 <tr className="grp-summary">
-                  <td colSpan={4}>
+                  <td colSpan={labelSpan}>
                     <GroupStatus g={g} />
                     {g.notes.length > 0 && (
                       <ul className="notes">
@@ -231,7 +244,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default" }:
           {visible.length === 0 && (
             <tbody>
               <tr>
-                <td colSpan={HEADERS.length} className="empty">
+                <td colSpan={headers.length} className="empty">
                   {filters.active ? "אין קבוצות תואמות לסינון." : "אין קבוצות להצגה."}
                 </td>
               </tr>

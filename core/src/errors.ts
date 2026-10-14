@@ -8,9 +8,11 @@ export type ExtractionErrorCode =
   | "OWN_DOC_NOT_RECOGNIZED"
   | "UNSUPPORTED_SUPPLIER"
   | "NO_LINES"
-  | "SCAN_UNREADABLE";
+  | "SCAN_UNREADABLE"
+  | "NOT_EXCEL"
+  | "MISSING_COLUMN";
 
-/** Raised when a PDF cannot be parsed; `message` is shown to the user (Hebrew). */
+/** Raised when a PDF or Excel file cannot be parsed; `message` is shown to the user (Hebrew). */
 export class ExtractionError extends Error {
   readonly code: ExtractionErrorCode;
 

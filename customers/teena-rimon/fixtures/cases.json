@@ -34,5 +34,14 @@
   "harKor": {
     "own": "sample_data/הר הקור אצל תאנה ורימון.pdf",
     "supplier": "sample_data/הר-קור.pdf"
+  },
+  "levi": {
+    "own": "sample_data/הדפסת טיוטת חש' מגדל_10028_4481.pdf",
+    "supplier": "sample_data/לוייי.pdf"
+  },
+  "excel": {
+    "format": "excel",
+    "own": "sample_data/excel/תאנה רוימון.xlsx",
+    "supplier": "sample_data/excel/דוחות-תאנה ורימון-22.9.26 (1).xlsx"
   }
 }

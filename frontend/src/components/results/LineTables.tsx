@@ -50,9 +50,32 @@ function LinesTable<T extends { id: string }>({ headers, classes, lines, cells }
 
 const SUPPLIER_HEADERS = ["שורה", "תאריך", "תעודה", "פנקס", "פריט", "אריזות", 'ק"ג', "מחיר", "הנחה", 'סה"כ נטו'];
 const SUPPLIER_CLASSES = ["mono", "", "mono", "mono", "name", "mono", "mono", "mono", "mono", "mono"];
+/** Excel reports: no booklet, no discount; one report covers many growers. */
+const EXCEL_SUPPLIER_HEADERS = ["שורה", "תאריך", "מגדל", "תעודה", "פריט", "אריזות", 'ק"ג', "מחיר", 'סה"כ'];
+const EXCEL_SUPPLIER_CLASSES = ["mono", "", "grower", "mono", "name", "mono", "mono", "mono", "mono"];
 
 /** Supplier rows that have no counterpart in the wholesaler's own document. */
-export function SupplierOnlyTable({ lines }: { lines: SupplierLine[] }) {
+export function SupplierOnlyTable({ lines, excel = false }: { lines: SupplierLine[]; excel?: boolean }) {
+  if (excel) {
+    return (
+      <LinesTable
+        headers={EXCEL_SUPPLIER_HEADERS}
+        classes={EXCEL_SUPPLIER_CLASSES}
+        lines={lines}
+        cells={(l) => [
+          l.id,
+          shortDate(l.date),
+          l.grower ?? "—",
+          l.docNumber ?? "—",
+          supplierItemMarked(l),
+          num(l.packages),
+          num(l.quantity),
+          num(l.unitPrice),
+          money(l.lineTotal),
+        ]}
+      />
+    );
+  }
   return (
     <LinesTable
       headers={SUPPLIER_HEADERS}
@@ -77,8 +100,30 @@ export function SupplierOnlyTable({ lines }: { lines: SupplierLine[] }) {
 const OWN_HEADERS = ["שורה", "תאריך", `מסמך ${customer.shortName}`, "אסמכתא", "פריט", "אריזות", 'ק"ג', "מחיר", "סכום (לפני הנחה)"];
 const OWN_CLASSES = ["mono", "", "mono", "mono", "name", "mono", "mono", "mono", "mono"];
 
+const EXCEL_OWN_HEADERS = ["שורה", "תאריך", "מגדל", "אסמכתא", "פריט", 'ק"ג', "מחיר", 'סה"כ'];
+const EXCEL_OWN_CLASSES = ["mono", "", "grower", "mono", "name", "mono", "mono", "mono"];
+
 /** Own-document rows the supplier did not invoice. */
-export function OwnOnlyTable({ lines }: { lines: OwnLine[] }) {
+export function OwnOnlyTable({ lines, excel = false }: { lines: OwnLine[]; excel?: boolean }) {
+  if (excel) {
+    return (
+      <LinesTable
+        headers={EXCEL_OWN_HEADERS}
+        classes={EXCEL_OWN_CLASSES}
+        lines={lines}
+        cells={(l) => [
+          l.id,
+          shortDate(l.date),
+          l.grower ?? "—",
+          l.supplierRef || "—",
+          ownItem(l),
+          num(l.quantity),
+          num(l.unitPrice),
+          money(l.lineTotal),
+        ]}
+      />
+    );
+  }
   return (
     <LinesTable
       headers={OWN_HEADERS}

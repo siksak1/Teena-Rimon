@@ -162,3 +162,34 @@ describe("reconcile — absorbing large splits", () => {
     expect(r.supplierOnly.map((l) => l.id)).toEqual(["S32", "S33", "S71"]);
   });
 });
+
+describe("reconcile — documents within a shekel", () => {
+  const sLine = (id: string, description: string, quantity: number, unitPrice: number): SupplierLine => ({
+    id, page: 1, date: "2026-09-01", docNumber: "SH1", bookRef: "100", description,
+    variety: "", sku: null, packages: 10, quantity, unit: "ק'ג", unitPrice, discountPct: 0, lineTotal: quantity * unitPrice,
+  });
+  const tLine = (id: string, product: string, quantity: number, unitPrice: number, packages = 10): OwnLine => ({
+    id, page: 1, date: "2026-09-01", ownDocNumber: "1", supplierRef: "100", product, size: "", packageType: "קרטון",
+    packages, quantity, unitPrice, lineTotal: quantity * unitPrice,
+  });
+  const extraction = (own: OwnLine[]): ExtractionResult => ({
+    supplier: { supplierId: "x", supplierName: "x", invoiceNumber: "1", invoiceDate: null, printedItemsTotal: null, warnings: [],
+      lines: [sLine("S1", "מנגו", 100, 10), sLine("S2", "אבוקדו", 100, 5)] },
+    own: { documentNumber: "1", againstInvoice: null, printedGrossTotal: null, commercialDiscount: 0, discountPct: 0, warnings: [],
+      lines: own },
+    meta: { ownFileName: "a", supplierFileName: "b" },
+  });
+
+  it("does not report weight and price gaps that add up to at most 1 ₪", () => {
+    const result = reconcile(extraction([tLine("T1", "מנגו", 100.05, 10), tLine("T2", "אבוקדו", 100, 5.004)]), TEENA_RIMON);
+    expect(result.groups.map((g) => g.flags)).toEqual([[], []]);
+    expect(find(result.groups, "S1").notes).toEqual(["הפרש זניח בתעודה כולה (+0.9 ₪) — לא מוצג כפער"]);
+  });
+
+  it("still reports package counts, and gaps above 1 ₪", () => {
+    const packages = reconcile(extraction([tLine("T1", "מנגו", 100, 10, 9), tLine("T2", "אבוקדו", 100, 5)]), TEENA_RIMON);
+    expect(find(packages.groups, "S1").flags).toEqual(["packages"]);
+    const above = reconcile(extraction([tLine("T1", "מנגו", 100.2, 10), tLine("T2", "אבוקדו", 100, 5)]), TEENA_RIMON);
+    expect(find(above.groups, "S1").flags).toEqual(["quantity"]);
+  });
+});

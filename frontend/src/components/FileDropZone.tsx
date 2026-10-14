@@ -7,6 +7,17 @@ type Props = {
   file: File | null;
   onFile: (file: File | null) => void;
   accent: "ours" | "supplier";
+  /** Which files the zone takes. */
+  kind?: "pdf" | "excel";
+};
+
+const KINDS: Record<"pdf" | "excel", { accept: Record<string, string[]>; tag: string; name: string }> = {
+  pdf: { accept: { "application/pdf": [".pdf"] }, tag: "PDF", name: "PDF" },
+  excel: {
+    accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
+    tag: "XLSX",
+    name: "אקסל (xlsx)",
+  },
 };
 
 function formatBytes(size: number): string {
@@ -15,24 +26,25 @@ function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function FileDropZone({ label, hint, file, onFile, accent }: Props) {
+export function FileDropZone({ label, hint, file, onFile, accent, kind = "pdf" }: Props) {
+  const { accept, tag, name } = KINDS[kind];
   const [rejectMessage, setRejectMessage] = useState<string | null>(null);
 
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
       setRejectMessage(null);
       if (rejected.length > 0) {
-        setRejectMessage("ניתן להעלות קובץ PDF בלבד (עד 15MB).");
+        setRejectMessage(`ניתן להעלות קובץ ${name} בלבד (עד 15MB).`);
         return;
       }
       if (accepted[0]) onFile(accepted[0]);
     },
-    [onFile],
+    [onFile, name],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "application/pdf": [".pdf"] },
+    accept,
     maxFiles: 1,
     maxSize: 15 * 1024 * 1024,
     multiple: false,
@@ -61,7 +73,7 @@ export function FileDropZone({ label, hint, file, onFile, accent }: Props) {
         {file ? (
           <div className="dropzone__file">
             <span className="dropzone__file-icon" aria-hidden>
-              PDF
+              {tag}
             </span>
             <div>
               <strong title={file.name}>{file.name}</strong>
@@ -73,7 +85,7 @@ export function FileDropZone({ label, hint, file, onFile, accent }: Props) {
             <span className="dropzone__plus" aria-hidden>
               +
             </span>
-            <strong>גררו לכאן קובץ PDF</strong>
+            <strong>גררו לכאן קובץ {name}</strong>
             <span>או לחצו לבחירת קובץ</span>
           </div>
         )}

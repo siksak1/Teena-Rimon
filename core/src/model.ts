@@ -30,6 +30,8 @@ export type SupplierLine = {
    * ["quantity", "lineTotal"]. Absent when everything checked out.
    */
   ocrUncertain?: (keyof SupplierLine)[];
+  /** Excel reports only: the grower the row belongs to (one report covers many growers). */
+  grower?: string;
 };
 
 export type SupplierInvoice = {
@@ -65,6 +67,8 @@ export type OwnLine = {
   unitPrice: number;
   /** Printed amount — before the commercial discount. */
   lineTotal: number;
+  /** Excel reports only: the grower the row belongs to. */
+  grower?: string;
 };
 
 export type OwnInvoice = {
@@ -85,6 +89,11 @@ export type ExtractionResult = {
   meta: {
     ownFileName: string;
     supplierFileName: string;
+    /**
+     * "excel": two spreadsheet reports covering many growers over a period,
+     * with no discount and no printed totals (see `extractExcel`). Absent for PDFs.
+     */
+    format?: "excel";
   };
 };
 

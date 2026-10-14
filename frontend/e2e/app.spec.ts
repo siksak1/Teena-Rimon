@@ -57,7 +57,7 @@ test("is not indexable and runs under the production security headers", async ({
   expect(headers["content-security-policy"]).toContain("connect-src https://eu.i.posthog.com;");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow, noarchive");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("השוואת חשבונית ספק מול תאנה ורימון");
-  await expect(page.locator(".site-foot")).toContainText("תצורה 2");
+  await expect(page.locator(".site-foot")).toContainText("תצורה 3");
 });
 
 test("reconciles real invoices in the browser; only a counts-only event leaves the page", async ({ page, baseURL }) => {
@@ -95,6 +95,37 @@ test("reads a scanned invoice by OCR in the browser; nothing but the counts-only
   });
   expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]|111081/);
   // The OCR engine and its models are the app's own script chunks: no fetch, no CSP exception.
+  expect(unexpectedRequests(watch, baseURL!)).toEqual([]);
+  expect(await watch.violations()).toEqual([]);
+  expect(watch.consoleErrors).toEqual([]);
+});
+
+test("compares two Excel reports after switching modes; only a counts-only event leaves the page", async ({ page, baseURL }) => {
+  const watch = await open(page);
+  await page.getByRole("radio", { name: "דוחות אקסל" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("השוואת דוח ספק מול תאנה ורימון");
+  const inputs = page.locator('input[type="file"]');
+  await inputs.nth(0).setInputFiles(sample("excel/תאנה רוימון.xlsx"));
+  await inputs.nth(1).setInputFiles(sample("excel/דוחות-תאנה ורימון-22.9.26 (1).xlsx"));
+  await page.getByRole("button", { name: "השוואת הדוחות" }).click();
+
+  await expect(page.locator(".results h2")).toHaveText("דוח ספק מול דוח תאנה ורימון (אקסל)");
+  await expect(page.locator(".total-card--hot strong")).toContainText("1,589.20");
+  await expect(page.locator(".count-strip")).toContainText("רק אצל הספק: 1");
+  await expect(page.getByRole("columnheader", { name: "מגדל" }).first()).toBeVisible();
+
+  await expect.poll(() => watch.analytics.length).toBe(1);
+  expect(watch.analytics[0]).toMatchObject({
+    event: "reconciliation_completed",
+    properties: { supplier_lines: 50, own_lines: 54, unmatched_supplier: 1 },
+  });
+  expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]|xlsx/);
+
+  // Switching back resets to PDF uploads.
+  await page.getByRole("radio", { name: "חשבוניות PDF" }).click();
+  await expect(page.locator(".results")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "השוואת החשבוניות" })).toBeDisabled();
+
   expect(unexpectedRequests(watch, baseURL!)).toEqual([]);
   expect(await watch.violations()).toEqual([]);
   expect(watch.consoleErrors).toEqual([]);

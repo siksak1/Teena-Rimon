@@ -86,8 +86,22 @@ GitHub Actions (`.github/workflows/ci.yml`) runs `npm test`, the typecheck/build
 - **Shivuk HaAsor (שיווק העשור)** — `core/src/parsers/hasor.ts` (detected by layout, since the name is only in the logo; net line totals, gross unit prices)
 - **Bananot Carmel (בננות כרמל)** — `core/src/parsers/carmel.ts`
 - **Har-Kor (הר-קור)** — `core/src/parsers/harKor.ts`. Scanned invoices only, read by OCR (see above). It is detected by its VAT number, either in the scanner's own text layer (too garbled to parse) or by OCR of the page header. Product short forms ("ש", "נ") are spelled out, and OCR'd names are snapped to Har-Kor's product list.
+- **Levi Tzadok (לוי צדוק ובניו)** — `core/src/parsers/levi.ts` (fixed-width printout, one cell per word; dates without a year; pallet rows skipped)
 
 The supplier is detected from the PDF (VAT number / company name), among the parsers the customer's config enables. To add a supplier, write a `SupplierParser` (see `core/src/parsers/types.ts`), register it in `SUPPLIER_PARSERS` in `core/src/parsers/registry.ts`, and add its id to `suppliers` in the configs of the customers who need it. Each parser checks that its lines add up to the total printed on the PDF and warns otherwise.
+
+### Excel reports (PDF / Excel switch)
+
+Customers with an `excel` block in their config get a switch between two PDF invoices and two Excel reports (`core/src/excel/`, read with `read-excel-file`, loaded only in Excel mode). Each report covers many growers over a period. Columns are found by header text; a missing column is reported by name.
+
+- **Supplier: grower sales report** (`grower-sales-report`) — מס' תעודה משלוח, שם מגדל, תאור, שם זן, גודל, תאור איכות, כמות, משקל מכירה, מחיר מכירה, תאריך. Variety, size and grade are joined into the item name. Rows where weight equals the package count (pineapples) are marked as sold by the piece.
+- **Own: Teena-Rimon weighings** (`teena-rimon-weighings`) — מגדל, תאריך, אסמכתא, תוצרת, משקל נטו, מחיר. One row per weighing; no package counts.
+
+Neither report has a discount or printed totals: money is weight × price on both sides. The same engine runs, with these differences:
+
+- **Growers** (`core/src/reconcile/growers.ts`) are paired one-to-one across the reports, by shared delivery notes first and by name second (noise words such as "משק" and "בע\"מ" dropped, vowel letters ignored: "דהאן פרותס" ↔ "פירות דהן ובניו בע\"מ"). Rows of different growers never match. `excel.growerAliases` pins names that don't resemble each other.
+- **Multi-row groups** need only their weights to add up, within `excel.tolerances.sumToleranceRel` (2%), since the two scales differ slightly.
+- **Family roll-up** — inside a paired delivery, the rows of one product that no smaller group placed form one n:m group when their weights add up (57+86 ↔ 72+71).
 
 ## Matching rules (`core/src/reconcile/`)
 

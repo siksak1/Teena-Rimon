@@ -1,14 +1,15 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { type CustomerConfig, parseCustomerConfig } from "../src/customer.js";
+import { extractExcel } from "../src/excel/extract.js";
 import { extractInvoices } from "../src/extract.js";
 import type { ExtractionResult } from "../src/model.js";
 import { NODE_SCAN_SUPPORT } from "./scanSupport.js";
 
 const REPO = new URL("../../", import.meta.url);
 
-/** One sample pair: paths relative to the repo root. */
-export type FixtureCase = { own: string; supplier: string };
+/** One sample pair: paths relative to the repo root. `format: "excel"` for two .xlsx reports. */
+export type FixtureCase = { own: string; supplier: string; format?: "excel" };
 
 /** Every folder under `customers/`. */
 export function customerSlugs(): string[] {
@@ -33,6 +34,17 @@ export const TEENA_RIMON = loadCustomer("teena-rimon");
 export const PAIRS = fixtureCases("teena-rimon")!;
 
 export async function extractCase(pair: FixtureCase, config: CustomerConfig): Promise<ExtractionResult> {
+  if (pair.format === "excel") {
+    return extractExcel(
+      {
+        ownXlsx: await readSample(pair.own),
+        supplierXlsx: await readSample(pair.supplier),
+        ownFileName: pair.own,
+        supplierFileName: pair.supplier,
+      },
+      config,
+    );
+  }
   return extractInvoices(
     {
       ownPdf: await readSample(pair.own),

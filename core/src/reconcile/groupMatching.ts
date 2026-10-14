@@ -23,6 +23,14 @@ export type MatchOptions = {
    * uneven for the exact search), and pair leftovers of one family.
    */
   absorbLeftovers?: boolean;
+  /**
+   * Excel reports: one side's rows are separate weighings with no package
+   * counts, and prices are exactly what is being checked — so a multi-row
+   * group needs only its weights to add up. Inside one paired delivery, the
+   * still-unmatched rows of a product family also form one n:m group when
+   * their weights add up (57+86 ↔ 72+71).
+   */
+  weighings?: boolean;
 };
 
 /**
@@ -42,6 +50,7 @@ export function matchGroups(
   for (const component of components(candidatesFor(supplier, own, matcher, tolerances, options))) {
     groups.push(...selectGroups(component.s, component.t, component.candidates));
   }
+  if (options.weighings && options.absorbLeftovers) familyRollup(groups, supplier, own, matcher, tolerances);
   if (options.absorbLeftovers) absorbLeftovers(groups, supplier, own, matcher, tolerances);
 
   const usedS = new Set(groups.flatMap((g) => g.s));
@@ -64,7 +73,7 @@ function candidatesFor(
   const add = (sGroup: SLine[], tGroup: OLine[]) => {
     if (!sGroup.every((a) => tGroup.every((b) => withinDays(a.line.date, b.line.date, tol.dateWindowDays)))) return;
     const multi = sGroup.length > 1 || tGroup.length > 1;
-    if (multi ? !sumsAgree(sGroup, tGroup, tol) : rejectPair(sGroup[0], tGroup[0], tol)) return;
+    if (multi ? !sumsAgree(sGroup, tGroup, tol, options.weighings) : rejectPair(sGroup[0], tGroup[0], tol)) return;
     out.push({ s: sGroup, t: tGroup, score: scoreGroup(sGroup, tGroup, matcher, tol) });
   };
 
@@ -114,6 +123,36 @@ function components(candidates: Candidate[]): { s: SLine[]; t: OLine[]; candidat
     entry.candidates.push(c);
   }
   return [...byRoot.values()].map((e) => ({ s: [...e.s], t: [...e.t], candidates: e.candidates }));
+}
+
+/**
+ * Per product family, the rows neither search placed — on both sides — become
+ * one group when their weights add up. Mutates `groups`.
+ */
+function familyRollup(
+  groups: Candidate[],
+  supplier: SLine[],
+  own: OLine[],
+  matcher: NameMatcher,
+  tol: Tolerances,
+): void {
+  const used = new Set<SLine | OLine>(groups.flatMap((g) => [...g.s, ...g.t]));
+  const byFamily = <T extends SLine | OLine>(rows: T[]) => {
+    const out = new Map<string, T[]>();
+    for (const r of rows) {
+      if (used.has(r) || !r.name.family) continue;
+      out.set(r.name.family, [...(out.get(r.name.family) ?? []), r]);
+    }
+    return out;
+  };
+  const tFamilies = byFamily(own);
+  for (const [family, s] of byFamily(supplier)) {
+    const t = tFamilies.get(family);
+    if (!t || s.length + t.length < 3) continue;
+    if (!s.every((a) => t.every((b) => withinDays(a.line.date, b.line.date, tol.dateWindowDays)))) continue;
+    if (!sumsAgree(s, t, tol, true)) continue;
+    groups.push({ s, t, score: scoreGroup(s, t, matcher, tol) });
+  }
 }
 
 /**
@@ -212,11 +251,16 @@ function rejectPair(s: SLine, t: OLine, tol: Tolerances): boolean {
   );
 }
 
-/** Multi-row groups need matching weight sums, plus equal packages or equal prices. */
-function sumsAgree(s: SLine[], t: OLine[], tol: Tolerances): boolean {
-  if (Math.abs(sumOf(s, (x) => x.line.quantity) - sumOf(t, (x) => x.line.quantity)) > tol.sumToleranceKg) {
-    return false;
-  }
+/**
+ * Multi-row groups need matching weight sums, plus equal packages or equal
+ * prices (`weighings`: the weights alone).
+ */
+function sumsAgree(s: SLine[], t: OLine[], tol: Tolerances, weighings = false): boolean {
+  const sKg = sumOf(s, (x) => x.line.quantity);
+  const tKg = sumOf(t, (x) => x.line.quantity);
+  const slack = Math.max(tol.sumToleranceKg, (tol.sumToleranceRel ?? 0) * Math.max(sKg, tKg));
+  if (Math.abs(sKg - tKg) > slack) return false;
+  if (weighings) return true;
   const sPk = packagesSum(s);
   const tPk = packagesSum(t);
   if (sPk != null && tPk != null && sPk === tPk) return true;

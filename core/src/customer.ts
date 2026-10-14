@@ -19,10 +19,20 @@ const tolerances = z.strictObject({
   maxGroupSize: z.int().min(1).max(8),
   /** Multi-row groups must add up to the same weight within this many kg. */
   sumToleranceKg: z.number().nonnegative(),
+  /**
+   * …or within this fraction of the larger sum, whichever is looser. Two
+   * scales weigh the same goods a little differently (Excel reports: up to ~2%).
+   */
+  sumToleranceRel: z.number().nonnegative().max(0.2).optional(),
   /** Rows (and documents) more than this many days apart are never matched. */
   dateWindowDays: z.int().nonnegative(),
   /** Net item totals within this many shekels count as equal (for offsetting). */
   offsetToleranceNis: z.number().nonnegative(),
+  /**
+   * A paired delivery document whose rows all matched and whose net totals
+   * differ by at most this many shekels is not reported as a gap.
+   */
+  documentToleranceNis: z.number().nonnegative().optional(),
   /** Rounding slack, in shekels, when checking quantity × price = line total. */
   arithmeticTolerance: z.number().nonnegative(),
 });
@@ -74,6 +84,25 @@ export const customerConfigSchema = z.strictObject({
   offsetting: z.enum(["invoice-wide", "off"]),
   /** Added to the shared product dictionary (merged, not replaced). */
   dictionary: dictionaryExtension.optional(),
+  /**
+   * Excel comparison mode (the PDF / Excel switch in the app). Absent: PDF only.
+   * Both reports cover many growers over a period; see `core/src/excel/`.
+   */
+  excel: z
+    .strictObject({
+      /** Format id of the supplier's sales report (`EXCEL_FORMATS`). */
+      supplierFormat: z.string().min(1),
+      /** Format id of the wholesaler's own receiving report. */
+      ownFormat: z.string().min(1),
+      /** Overrides `tolerances` in Excel mode. */
+      tolerances: tolerances.partial().optional(),
+      /**
+       * Grower names that don't resemble each other across the two reports:
+       * name as written in either report → name as written in the other.
+       */
+      growerAliases: z.record(z.string(), z.string()).optional(),
+    })
+    .optional(),
   /** Usage analytics (counts only). Each customer's agreement says what is sent. */
   analytics: z.strictObject({
     /** Also send the invoice's net gap, rounded to ₪10. */

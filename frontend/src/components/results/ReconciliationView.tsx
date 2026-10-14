@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
 import customer from "@customer-config";
-import { money, OCR_MARK, percent, signedMoney } from "./format";
+import { money, OCR_MARK, percent, shortDate, signedMoney } from "./format";
 import { OwnOnlyTable, SupplierOnlyTable } from "./LineTables";
 import { MatchedGroupsTable } from "./MatchedGroupsTable";
 
@@ -22,6 +22,9 @@ export function ReconciliationView({ extraction, result }: Props) {
   const withGaps = result.groups.filter((g) => g.flags.length > 0).length;
   const isBalanced = Math.abs(totals.diff) < 0.005;
   const { supplier } = extraction;
+  /** Two Excel reports (many growers, no discount) rather than two invoices. */
+  const excel = extraction.meta.format === "excel";
+  const docs = excel ? "הדוחות" : "החשבוניות";
   const ocrUncertain = supplier.lines.filter((l) => l.ocrUncertain).length;
 
   async function handleExport() {
@@ -43,13 +46,24 @@ export function ReconciliationView({ extraction, result }: Props) {
         <p className="eyebrow">
           תוצאות ההתאמה
         </p>
-        <h2>
-          {extraction.supplier.supplierName} · חשבונית {extraction.supplier.invoiceNumber}
-        </h2>
-        <p className="results__meta">
-          מול חשבונית {ownName} {extraction.own.documentNumber}
-          {extraction.own.againstInvoice && ` (כנגד חשבונית ${extraction.own.againstInvoice})`}
-        </p>
+        {excel ? (
+          <>
+            <h2>דוח ספק מול דוח {ownName} (אקסל)</h2>
+            <p className="results__meta">
+              {new Set(supplier.lines.map((l) => l.grower)).size} מגדלים · {periodOf(supplier.lines)}
+            </p>
+          </>
+        ) : (
+          <>
+            <h2>
+              {extraction.supplier.supplierName} · חשבונית {extraction.supplier.invoiceNumber}
+            </h2>
+            <p className="results__meta">
+              מול חשבונית {ownName} {extraction.own.documentNumber}
+              {extraction.own.againstInvoice && ` (כנגד חשבונית ${extraction.own.againstInvoice})`}
+            </p>
+          </>
+        )}
         <div className="results__actions">
           <button type="button" className="btn btn--ghost" onClick={handleExport} disabled={exporting === "busy"}>
             {exporting === "busy" ? "מייצא…" : "ייצוא לאקסל"}
@@ -64,12 +78,14 @@ export function ReconciliationView({ extraction, result }: Props) {
 
       <div className="totals-grid">
         <div className="total-card">
-          <span>ספק — סה"כ פריטים נטו</span>
+          <span>{excel ? 'ספק — סה"כ (ק"ג × מחיר)' : 'ספק — סה"כ פריטים נטו'}</span>
           <strong>{money(totals.supplierNet)}</strong>
         </div>
         <div className="total-card">
           <span>
-            {ownName} — {money(totals.ownGross)} פחות הנחה {percent(totals.ownDiscountPct)}
+            {excel
+              ? `${ownName} — סה"כ (ק"ג × מחיר)`
+              : `${ownName} — ${money(totals.ownGross)} פחות הנחה ${percent(totals.ownDiscountPct)}`}
           </span>
           <strong>{money(totals.ownNet)}</strong>
         </div>
@@ -118,15 +134,18 @@ export function ReconciliationView({ extraction, result }: Props) {
           </label>
         </div>
         <p className="section-hint">
-          הסה"כ נטו של {ownName} מחושב אחרי הנחה מסחרית של {percent(totals.ownDiscountPct)}. בשורת הסיכום של כל קבוצה: הפרש אריזות, ק"ג, ימים וכסף.
+          {excel
+            ? 'הסכום בכל שורה הוא ק"ג × מחיר, בלי הנחה. שורות מוצמדות רק בתוך אותו מגדל. '
+            : `הסה"כ נטו של ${ownName} מחושב אחרי הנחה מסחרית של ${percent(totals.ownDiscountPct)}. `}
+          בשורת הסיכום של כל קבוצה: הפרש אריזות, ק"ג, ימים וכסף.
         </p>
-        <MatchedGroupsTable groups={mainGroups} ownDiscountPct={totals.ownDiscountPct} />
+        <MatchedGroupsTable groups={mainGroups} ownDiscountPct={totals.ownDiscountPct} growers={excel} />
       </section>
 
       <section className="results__section">
         <h3>רק אצל הספק ({result.supplierOnly.length})</h3>
         {result.supplierOnly.length ? (
-          <SupplierOnlyTable lines={result.supplierOnly} />
+          <SupplierOnlyTable lines={result.supplierOnly} excel={excel} />
         ) : (
           <p className="empty">כל שורות הספק הוצמדו.</p>
         )}
@@ -135,7 +154,7 @@ export function ReconciliationView({ extraction, result }: Props) {
       <section className="results__section">
         <h3>רק אצל {ownName} ({result.ownOnly.length})</h3>
         {result.ownOnly.length ? (
-          <OwnOnlyTable lines={result.ownOnly} />
+          <OwnOnlyTable lines={result.ownOnly} excel={excel} />
         ) : (
           <p className="empty">כל שורות {ownName} הוצמדו.</p>
         )}
@@ -147,20 +166,29 @@ export function ReconciliationView({ extraction, result }: Props) {
           offset.groups.length ? (
             <>
               <p className="section-hint">
-                סה"כ החשבוניות זהה, ולכן פערי המחיר והמשקל בקבוצות הבאות מתקזזים זה בזה (סכום הפערים: {signedMoney(offset.groups.reduce((a, g) => a + g.netDiff, 0))}).
+                סה"כ {docs} זהה, ולכן פערי המחיר והמשקל בקבוצות הבאות מתקזזים זה בזה (סכום הפערים: {signedMoney(offset.groups.reduce((a, g) => a + g.netDiff, 0))}).
               </p>
-              <MatchedGroupsTable groups={offset.groups} ownDiscountPct={totals.ownDiscountPct} tone="offset" />
+              <MatchedGroupsTable groups={offset.groups} ownDiscountPct={totals.ownDiscountPct} tone="offset" growers={excel} />
             </>
           ) : (
-            <p className="empty">סה"כ החשבוניות זהה ואין פערים לקיזוז.</p>
+            <p className="empty">סה"כ {docs} זהה ואין פערים לקיזוז.</p>
           )
         ) : (
           <p className="empty">
-            אין קיזוז: סה"כ נטו אינו זהה (פער של {signedMoney(totals.diff)}), ולכן כל הפערים מוצגים בטבלה הראשית.
+            אין קיזוז: סה"כ {docs} אינו זהה (פער של {signedMoney(totals.diff)}), ולכן כל הפערים מוצגים בטבלה הראשית.
           </p>
         )}
       </section>
 
     </section>
   );
+}
+
+/** "31/08/26 – 08/09/26": the dates a report covers. */
+function periodOf(lines: { date: string | null }[]): string {
+  const dates = lines.map((l) => l.date).filter((d): d is string => Boolean(d)).sort();
+  if (dates.length === 0) return "";
+  const first = shortDate(dates[0]);
+  const last = shortDate(dates[dates.length - 1]);
+  return first === last ? first : `${first} – ${last}`;
 }

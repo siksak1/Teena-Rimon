@@ -21,6 +21,14 @@ export function signedNum(value: number | null): string {
   return value > 0 ? `+${numberFmt.format(value)}` : numberFmt.format(value);
 }
 
+/** Day gaps up to this size are routine (delivery vs. booking day) and not shown. */
+const SHOWN_DATE_DELTA_DAYS = 7;
+
+/** The group's day gap when it is worth showing, else null. */
+export function shownDateDelta(dateDelta: number | null): number | null {
+  return dateDelta != null && Math.abs(dateDelta) > SHOWN_DATE_DELTA_DAYS ? dateDelta : null;
+}
+
 /** "2026-09-01" → "01/09/26" */
 export function shortDate(iso: string | null): string {
   if (!iso) return "—";

@@ -158,6 +158,37 @@ describe("HaHaklaim parser", () => {
   });
 });
 
+describe("Levi Tzadok parser", () => {
+  it("reads every item line, skipping pallet rows", async () => {
+    const { supplier, own } = await extractSample("levi");
+    expect(supplier.supplierId).toBe("levi");
+    expect(supplier.invoiceNumber).toBe("019614");
+    expect(supplier.invoiceDate).toBe("2026-09-30");
+    expect(supplier.lines).toHaveLength(53);
+    expect(supplier.lines.some((l) => l.description.startsWith("משטח"))).toBe(false);
+    expect(supplier.lines[0]).toMatchObject({
+      date: "2026-09-02",
+      docNumber: "126238",
+      description: "קישואים",
+      packages: 2,
+      quantity: 29,
+      unit: 'ק"ג',
+      unitPrice: 7.5,
+      lineTotal: 217.5,
+    });
+    // Unit-priced rows have no weight; blank packages stay null.
+    expect(supplier.lines.find((l) => l.description === "אננס")).toMatchObject({ packages: 18, quantity: 18, unit: "יח'" });
+    expect(supplier.lines.find((l) => l.description === "דלעת")).toMatchObject({ packages: null, quantity: 148 });
+
+    expect(sum(supplier.lines)).toBe(26079.4);
+    expect(supplier.printedItemsTotal).toBe(26079.4);
+    expect(supplier.warnings).toEqual([]);
+
+    expect(own.againstInvoice).toBe("19614");
+    expect(own.lines).toHaveLength(39);
+  });
+});
+
 describe("Galil Shuk Mekomi parser", () => {
   it("reads every item line across pages, without pallets, and matches the printed total", async () => {
     const { supplier } = await extractSample("galil");

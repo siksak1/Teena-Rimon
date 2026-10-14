@@ -1,5 +1,12 @@
 import type { CustomerConfig } from "../customer.js";
-import type { ExtractionResult, GapFlag, MatchGroup, ReconciliationResult } from "../model.js";
+import type {
+  ExtractionResult,
+  GapFlag,
+  MatchGroup,
+  OwnLine,
+  ReconciliationResult,
+  SupplierLine,
+} from "../model.js";
 import { round2 } from "../pdf/text.js";
 import { describeGroup } from "./diffs.js";
 import { pairDocuments } from "./docPairing.js";
@@ -25,28 +32,51 @@ export function reconcile(
   config: CustomerConfig,
   matcher: NameMatcher = matcherFor(config),
 ): ReconciliationResult {
-  const tol = config.tolerances;
-  const { supplier, own } = prepare(extraction, matcher, config);
+  const excel = extraction.meta.format === "excel";
+  const tol = excel ? { ...config.tolerances, ...config.excel?.tolerances } : config.tolerances;
+  const { supplier, own, warnings: prepareWarnings } = prepare(extraction, matcher, config);
   const ownDiscountPct = extraction.own.discountPct;
 
   // 1. Pair delivery documents, 2. match rows inside each pair.
   const { scopes, unpairedSupplier, unpairedOwn } = pairDocuments(supplier, own, tol);
   const candidates: Candidate[] = [];
+  /** Candidates of fully matched documents whose net gap is within `documentToleranceNis` → that gap. */
+  const settled = new Map<Candidate, number>();
   const leftoverS = [...unpairedSupplier];
   const leftoverT = [...unpairedOwn];
   for (const scope of scopes) {
-    const r = matchGroups(scope.supplier, scope.own, matcher, tol, { absorbLeftovers: true });
+    const r = matchGroups(scope.supplier, scope.own, matcher, tol, { absorbLeftovers: true, weighings: excel });
     candidates.push(...r.groups);
     leftoverS.push(...r.leftoverSupplier);
     leftoverT.push(...r.leftoverOwn);
+    // Gaps that cancel out inside the document still count: sum their sizes, not their signs.
+    const docDiff = round2(r.groups.reduce((a, c) => a + netOf(c.t) - netOf(c.s), 0));
+    const docGap = round2(r.groups.reduce((a, c) => a + Math.abs(netOf(c.t) - netOf(c.s)), 0));
+    const whole = r.groups.length > 0 && !r.leftoverSupplier.length && !r.leftoverOwn.length;
+    if (whole && tol.documentToleranceNis != null && docGap <= tol.documentToleranceNis) {
+      r.groups.forEach((c) => settled.set(c, docDiff));
+    }
   }
 
   // 3. Leftover pass: rows still unmatched, across documents (within the date window; unrelated names need equal numbers).
-  const last = matchGroups(leftoverS, leftoverT, matcher, tol, { strictUnrelatedNames: true });
-  candidates.push(...last.groups);
+  //    Excel reports: per grower — rows of different growers never match.
+  const supplierOnly: SupplierLine[] = [];
+  const ownOnly: OwnLine[] = [];
+  for (const party of new Set([...leftoverS, ...leftoverT].map((x) => x.party))) {
+    const last = matchGroups(
+      leftoverS.filter((x) => x.party === party),
+      leftoverT.filter((x) => x.party === party),
+      matcher,
+      tol,
+      { strictUnrelatedNames: true, weighings: excel },
+    );
+    candidates.push(...last.groups);
+    supplierOnly.push(...last.leftoverSupplier.map((x) => x.line));
+    ownOnly.push(...last.leftoverOwn.map((x) => x.line));
+  }
 
   const groups = candidates
-    .map((c) => describeGroup("", c, ownDiscountPct, matcher, config.displayName))
+    .map((c) => describeGroup("", c, ownDiscountPct, matcher, config.displayName, settled.get(c) ?? null))
     .sort(bySeverity)
     .map((g, i) => ({ ...g, id: `G${i + 1}` }));
 
@@ -68,11 +98,11 @@ export function reconcile(
 
   return {
     groups,
-    supplierOnly: last.leftoverSupplier.map((x) => x.line).sort(byId),
-    ownOnly: last.leftoverOwn.map((x) => x.line).sort(byId),
+    supplierOnly: supplierOnly.sort(byId),
+    ownOnly: ownOnly.sort(byId),
     offset: { applies, groups: offsetGroups },
     totals: { supplierNet, ownGross, ownDiscountPct, ownNet, diff },
-    warnings: [...extraction.supplier.warnings, ...extraction.own.warnings],
+    warnings: [...extraction.supplier.warnings, ...extraction.own.warnings, ...prepareWarnings],
     dictionarySuggestions: [...new Set(matchedNames.flatMap((n) => n.unknown))].sort(),
   };
 }
@@ -86,6 +116,10 @@ function bySeverity(a: MatchGroup, b: MatchGroup): number {
     return Math.abs(b.netDiff) - Math.abs(a.netDiff);
   }
   return byId(a.supplierLines[0], b.supplierLines[0]);
+}
+
+function netOf(lines: { net: number }[]): number {
+  return lines.reduce((a, x) => a + x.net, 0);
 }
 
 function byId(a: { id: string }, b: { id: string }): number {

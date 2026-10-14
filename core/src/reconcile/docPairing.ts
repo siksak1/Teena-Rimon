@@ -27,8 +27,10 @@ export function pairDocuments(
   tolerances: Tolerances,
 ): { scopes: Scope[]; unpairedSupplier: SLine[]; unpairedOwn: OLine[] } {
   const window = tolerances.dateWindowDays;
-  const sDocs = groupBy(supplier, (s) => s.line.docNumber ?? `date:${s.line.date}`);
-  const tDocs = groupBy(own, (t) => t.line.ownDocNumber || `date:${t.line.date}`);
+  // Excel reports: a document number is only unique per grower (party).
+  const sDocs = groupBy(supplier, (s) => `${s.party ?? ""}|${s.line.docNumber ?? `date:${s.line.date}`}`);
+  const tDocs = groupBy(own, (t) => `${t.party ?? ""}|${t.line.ownDocNumber || `date:${t.line.date}`}`);
+  const sameParty = (sDoc: SLine[], tDoc: OLine[]) => sDoc[0].party === tDoc[0].party;
   const scopes: Scope[] = [];
   const pairedT = new Set<OLine[]>();
   const pairedS = new Set<SLine[]>();
@@ -36,7 +38,9 @@ export function pairDocuments(
   // Pass A — reference match. One supplier doc may cover several own docs.
   for (const sDoc of sDocs) {
     const keys = new Set(sDoc.flatMap((s) => s.refs));
-    const matches = tDocs.filter((tDoc) => !pairedT.has(tDoc) && tDoc.some((t) => t.ref && keys.has(t.ref)));
+    const matches = tDocs.filter(
+      (tDoc) => !pairedT.has(tDoc) && sameParty(sDoc, tDoc) && tDoc.some((t) => t.ref && keys.has(t.ref)),
+    );
     if (matches.length === 0) continue;
     matches.forEach((m) => pairedT.add(m));
     pairedS.add(sDoc);
@@ -48,7 +52,7 @@ export function pairDocuments(
   for (const sDoc of sDocs) {
     if (pairedS.has(sDoc)) continue;
     for (const tDoc of tDocs) {
-      if (pairedT.has(tDoc)) continue;
+      if (pairedT.has(tDoc) || !sameParty(sDoc, tDoc)) continue;
       if (!withinDays(sDoc[0].line.date, tDoc[0].line.date, window)) continue;
       const score = contentSimilarity(sDoc, tDoc);
       if (score < CONTENT_THRESHOLD) continue;

@@ -22,6 +22,12 @@ export function describeGroup(
   ownDiscountPct: number,
   matcher: NameMatcher,
   ownName: string,
+  /**
+   * Net gap of the whole document when it is within `documentToleranceNis`:
+   * weight and price gaps are then not reported (package counts and discount
+   * rates still are).
+   */
+  settledDocDiff: number | null = null,
 ): MatchGroup {
   const { s, t } = candidate;
   const flags = new Set<GapFlag>();
@@ -32,9 +38,19 @@ export function describeGroup(
   const sKg = s.reduce((a, x) => a + x.line.quantity, 0);
   const tKg = t.reduce((a, x) => a + x.line.quantity, 0);
   const quantityDiff = round2(tKg - sKg);
-  if (Math.abs(quantityDiff) > EPS) {
+  const sPrices = unique(s.map((x) => x.line.unitPrice));
+  const tPrices = unique(t.map((x) => x.line.unitPrice));
+  const priceGap = sPrices.some((a) => tPrices.some((b) => Math.abs(a - b) > PRICE_EPS));
+  // The document as a whole is within a shekel or so: weight and price gaps are not reported.
+  const settled = settledDocDiff != null;
+  if (settled && (Math.abs(quantityDiff) > EPS || priceGap)) {
+    notes.push(`הפרש זניח בתעודה כולה (${signed(settledDocDiff)} ₪) — לא מוצג כפער`);
+  }
+  if (!settled && Math.abs(quantityDiff) > EPS) {
     flags.add("quantity");
-    notes.push(`משקל: ספק ${fmt(sKg)}, ${ownName} ${fmt(tKg)} (${signed(quantityDiff)})`);
+    // Excel reports: pineapples are counted in pieces, not weighed.
+    const label = s.every((x) => x.line.unit === "יח'") ? "יחידות" : "משקל";
+    notes.push(`${label}: ספק ${fmt(sKg)}, ${ownName} ${fmt(tKg)} (${signed(quantityDiff)})`);
   }
 
   const sPk = s.every((x) => x.line.packages != null) ? s.reduce((a, x) => a + (x.line.packages ?? 0), 0) : null;
@@ -45,9 +61,7 @@ export function describeGroup(
     notes.push(`אריזות: ספק ${sPk}, ${ownName} ${tPk}`);
   }
 
-  const sPrices = unique(s.map((x) => x.line.unitPrice));
-  const tPrices = unique(t.map((x) => x.line.unitPrice));
-  if (sPrices.some((a) => tPrices.some((b) => Math.abs(a - b) > PRICE_EPS))) {
+  if (!settled && priceGap) {
     flags.add("price");
     notes.push(`מחיר: ספק ${sPrices.map(fmt).join("/")}, ${ownName} ${tPrices.map(fmt).join("/")}`);
   }
@@ -63,6 +77,7 @@ export function describeGroup(
     flags.add("name");
     notes.push(...conflicts);
   }
+
   // Matched on doc / date / numbers alone — informational, not a gap.
   if (s.some((a) => t.some((b) => !matcher.compare(a.name, b.name).sameFamily))) {
     const sNames = unique(s.map((x) => x.line.description));

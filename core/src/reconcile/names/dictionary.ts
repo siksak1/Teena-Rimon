@@ -54,6 +54,9 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     "כרוב",
     "קישוא",
     "אגס",
+    "מלון",
+    "תפוח אדמה",
+    "ג'ינג'ר",
   ],
   familyAliases: {
     ענבים: "ענב",
@@ -65,6 +68,13 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     "dragon fruit": "פיטאיה",
     pitaya: "פיטאיה",
     פטאיה: "פיטאיה",
+    // Levi Tzadok vs the wholesaler's draft
+    זוקיני: "קישוא",
+    מילון: "מלון",
+    תפוא: "תפוח אדמה",
+    'תפו"א': "תפוח אדמה",
+    "גי'נג'ר": "ג'ינג'ר",
+    גינגיר: "ג'ינג'ר",
   },
   cultivars: {
     // Grapes
@@ -122,6 +132,7 @@ export const DEFAULT_DICTIONARY: NameDictionary = {
     "סוג א": "א",
     "סוג ב": "ב",
     תפזורת: "ב",
+    בתפזורת: "ב",
     בררה: "ב",
     נספק: "ב",
     "אא'": "א",

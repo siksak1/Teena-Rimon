@@ -1,10 +1,10 @@
 {
   "slug": "teena-rimon",
-  "configVersion": 2,
+  "configVersion": 3,
   "displayName": "תאנה ורימון",
   "shortName": "ת\"ר",
   "ownDocument": { "format": "agroline-draft", "label": "חשבונית טיוטה (AGROLINE)" },
-  "suppliers": ["granot", "shivuk-hahof", "d-hai", "menashri", "haklaim", "galil", "carmel", "hasor", "har-kor"],
+  "suppliers": ["granot", "shivuk-hahof", "d-hai", "menashri", "haklaim", "galil", "carmel", "hasor", "har-kor", "levi"],
   "referenceRules": ["docNumber", "bookRef"],
   "tolerances": {
     "rejectRelativeDiff": 0.05,
@@ -12,9 +12,15 @@
     "sumToleranceKg": 1,
     "dateWindowDays": 2,
     "offsetToleranceNis": 1,
+    "documentToleranceNis": 1,
     "arithmeticTolerance": 0.05
   },
   "unprintedDiscounts": { "carmel": 0.12 },
   "offsetting": "invoice-wide",
+  "excel": {
+    "supplierFormat": "grower-sales-report",
+    "ownFormat": "teena-rimon-weighings",
+    "tolerances": { "sumToleranceRel": 0.02 }
+  },
   "analytics": { "sendDiscrepancyAmount": true }
 }
