@@ -414,6 +414,106 @@
   box-shadow: inset -4px 0 0 var(--miss);
 }
 
+/* Partial sums: rows the user ticks, and the bar that adds them up. */
+.rec-table tbody tr[aria-selected] {
+  cursor: pointer;
+}
+
+.sel-box {
+  margin: 0 0 0 0.4rem;
+  vertical-align: middle;
+  accent-color: var(--ours);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.rec-table tr:hover .sel-box,
+.sel-box:focus-visible,
+.results--has-selection .sel-box {
+  opacity: 1;
+}
+
+.rec-table tr.is-selected td:not(.grp-id) {
+  background: rgba(31, 111, 120, 0.1);
+}
+
+.rec-table tr.is-selected td:nth-child(1 of :not(.grp-id)) {
+  box-shadow: inset -3px 0 0 var(--ours);
+}
+
+.results--has-selection {
+  padding-bottom: 5.5rem;
+}
+
+.sum-bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 1.1rem;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin-inline: auto;
+  padding: 0.65rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(11, 31, 36, 0.16);
+  color: var(--text);
+  font-size: 0.9rem;
+  animation: sum-bar-in 0.15s ease-out both;
+}
+
+.sum-bar .mono {
+  font-family: var(--font-mono);
+}
+
+.sum-bar .is-hot {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.sum-bar__part + .sum-bar__part {
+  padding-inline-start: 1.1rem;
+  border-inline-start: 1px solid var(--line);
+}
+
+.sum-bar__hidden {
+  color: var(--muted);
+}
+
+.sum-bar__clear {
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sum-bar__clear:hover {
+  color: var(--text);
+}
+
+@keyframes sum-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sum-bar {
+    animation: none;
+  }
+}
+
 @media (max-width: 860px) {
   .totals-grid {
     grid-template-columns: 1fr;

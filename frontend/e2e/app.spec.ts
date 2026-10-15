@@ -223,6 +223,24 @@ test("collapses ₪0 groups, filters by column and exports to Excel without leav
   await matched.getByRole("button", { name: "ניקוי סינון" }).click();
   await expect(groups).toHaveCount(total);
 
+  // Clicking rows shows their partial sum in a bar that stays on screen; Esc clears it.
+  const g1 = groups.first();
+  const supplierRow = g1.locator("tr.side-supplier").first();
+  const ownRow = g1.locator("tr.side-tr").first();
+  const kg = async (row: typeof supplierRow) => Number((await row.locator("td.mono").nth(-3).innerText()).replace(/[^\d.]/g, ""));
+  const supplierKg = await kg(supplierRow);
+  const ownKg = await kg(ownRow);
+  await supplierRow.locator("td.name").click();
+  const bar = page.locator(".sum-bar");
+  await expect(bar).toContainText(`נבחרו שורה אחת`);
+  await expect(bar).toBeInViewport();
+  await ownRow.locator("td.name").click();
+  await expect(bar).toContainText(`הפרש`);
+  const shownDiff = Number((await bar.locator(".sum-bar__part").nth(2).locator(".mono").first().innerText()).replace(/[^\d.-]/g, ""));
+  expect(shownDiff).toBeCloseTo(ownKg - supplierKg, 3);
+  await page.keyboard.press("Escape");
+  await expect(bar).toHaveCount(0);
+
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "ייצוא לאקסל" }).click();
   const download = await downloading;

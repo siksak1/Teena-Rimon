@@ -2,7 +2,9 @@ import type { OwnLine, SupplierLine } from "@core/model.js";
 import customer from "@customer-config";
 import { rowMatches, useColumnFilters } from "./filtering";
 import { ClearFilters, FilterableHead } from "./ColumnFilters";
-import { money, num, ownItem, shortDate, supplierItemMarked } from "./format";
+import { money, num, ownItem, ownNet, shortDate, supplierItemMarked } from "./format";
+import { ownKey, supplierKey, type SelItem, type SelTable } from "./selection";
+import { SelRow } from "./SumBar";
 
 type Props<T> = {
   headers: string[];
@@ -11,11 +13,16 @@ type Props<T> = {
   lines: T[];
   /** The text shown in each column; also what the column filters match on. */
   cells: (line: T) => string[];
+  /** Selection key and partial-sum values of a line. */
+  sel: (line: T) => [string, SelItem];
 };
 
-function LinesTable<T extends { id: string }>({ headers, classes, lines, cells }: Props<T>) {
+function LinesTable<T extends { id: string }>({ headers, classes, lines, cells, sel }: Props<T>) {
   const filters = useColumnFilters(headers.length);
-  const rows = lines.map((l) => ({ id: l.id, cells: cells(l) })).filter((r) => rowMatches(r.cells, filters.values));
+  const rows = lines
+    .map((l) => ({ id: l.id, cells: cells(l), sel: sel(l) }))
+    .filter((r) => rowMatches(r.cells, filters.values));
+  const selTable: SelTable = new Map(rows.map((r) => r.sel));
   return (
     <>
       <div className="table-tools">
@@ -26,13 +33,16 @@ function LinesTable<T extends { id: string }>({ headers, classes, lines, cells }
           <FilterableHead headers={headers} filters={filters} />
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="row-missing">
-                {r.cells.map((c, i) => (
-                  <td key={headers[i]} className={classes[i]}>
-                    {c}
-                  </td>
-                ))}
-              </tr>
+              <SelRow key={r.id} selKey={r.sel[0]} table={selTable} className="row-missing">
+                {(box) =>
+                  r.cells.map((c, i) => (
+                    <td key={headers[i]} className={classes[i]}>
+                      {i === 0 && box}
+                      {c}
+                    </td>
+                  ))
+                }
+              </SelRow>
             ))}
             {rows.length === 0 && (
               <tr>
@@ -62,6 +72,7 @@ export function SupplierOnlyTable({ lines, excel = false }: { lines: SupplierLin
         headers={EXCEL_SUPPLIER_HEADERS}
         classes={EXCEL_SUPPLIER_CLASSES}
         lines={lines}
+        sel={(l) => [supplierKey(l.id), { side: "supplier", quantity: l.quantity, amount: l.lineTotal }]}
         cells={(l) => [
           l.id,
           shortDate(l.date),
@@ -81,6 +92,7 @@ export function SupplierOnlyTable({ lines, excel = false }: { lines: SupplierLin
       headers={SUPPLIER_HEADERS}
       classes={SUPPLIER_CLASSES}
       lines={lines}
+      sel={(l) => [supplierKey(l.id), { side: "supplier", quantity: l.quantity, amount: l.lineTotal }]}
       cells={(l) => [
         l.id,
         shortDate(l.date),
@@ -104,13 +116,23 @@ const EXCEL_OWN_HEADERS = ["שורה", "תאריך", "מגדל", "אסמכתא",
 const EXCEL_OWN_CLASSES = ["mono", "", "grower", "mono", "name", "mono", "mono", "mono"];
 
 /** Own-document rows the supplier did not invoice. */
-export function OwnOnlyTable({ lines, excel = false }: { lines: OwnLine[]; excel?: boolean }) {
+export function OwnOnlyTable({
+  lines,
+  ownDiscountPct,
+  excel = false,
+}: {
+  lines: OwnLine[];
+  /** Partial sums use the net after the commercial discount, like the matched groups. */
+  ownDiscountPct: number;
+  excel?: boolean;
+}) {
   if (excel) {
     return (
       <LinesTable
         headers={EXCEL_OWN_HEADERS}
         classes={EXCEL_OWN_CLASSES}
         lines={lines}
+        sel={(l) => [ownKey(l.id), { side: "own", quantity: l.quantity, amount: ownNet(l, ownDiscountPct) }]}
         cells={(l) => [
           l.id,
           shortDate(l.date),
@@ -129,6 +151,7 @@ export function OwnOnlyTable({ lines, excel = false }: { lines: OwnLine[]; excel
       headers={OWN_HEADERS}
       classes={OWN_CLASSES}
       lines={lines}
+      sel={(l) => [ownKey(l.id), { side: "own", quantity: l.quantity, amount: ownNet(l, ownDiscountPct) }]}
       cells={(l) => [
         l.id,
         shortDate(l.date),

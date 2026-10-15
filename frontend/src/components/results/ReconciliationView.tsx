@@ -4,13 +4,25 @@ import customer from "@customer-config";
 import { money, OCR_MARK, percent, shortDate, signedMoney } from "./format";
 import { OwnOnlyTable, SupplierOnlyTable } from "./LineTables";
 import { MatchedGroupsTable } from "./MatchedGroupsTable";
+import { useSelection } from "./selection";
+import { SelectionProvider, SumBar } from "./SumBar";
 
 type Props = {
   extraction: ExtractionResult;
   result: ReconciliationResult;
 };
 
-export function ReconciliationView({ extraction, result }: Props) {
+export function ReconciliationView(props: Props) {
+  return (
+    <SelectionProvider>
+      <Results {...props} />
+      <SumBar />
+    </SelectionProvider>
+  );
+}
+
+function Results({ extraction, result }: Props) {
+  const { selected } = useSelection();
   const ownName = customer.displayName;
   const [hideClean, setHideClean] = useState(false);
   const [exporting, setExporting] = useState<"idle" | "busy" | "failed">("idle");
@@ -41,7 +53,7 @@ export function ReconciliationView({ extraction, result }: Props) {
   }
 
   return (
-    <section className="results" aria-label="תוצאות ההתאמה">
+    <section className={`results ${selected.size ? "results--has-selection" : ""}`} aria-label="תוצאות ההתאמה">
       <header className="results__header">
         <p className="eyebrow">
           תוצאות ההתאמה
@@ -142,7 +154,7 @@ export function ReconciliationView({ extraction, result }: Props) {
           {excel
             ? 'הסכום בכל שורה הוא ק"ג × מחיר, בלי הנחה. שורות מוצמדות רק בתוך אותו מגדל. '
             : `הסה"כ נטו של ${ownName} מחושב אחרי הנחה מסחרית של ${percent(totals.ownDiscountPct)}. `}
-          בשורת הסיכום של כל קבוצה: הפרש אריזות, ק"ג, ימים וכסף.
+          בשורת הסיכום של כל קבוצה: הפרש אריזות, ק"ג, ימים וכסף. לחיצה על שורות מציגה את סכום הק"ג והכסף שלהן.
         </p>
         <MatchedGroupsTable groups={mainGroups} ownDiscountPct={totals.ownDiscountPct} growers={excel} />
       </section>
@@ -159,7 +171,7 @@ export function ReconciliationView({ extraction, result }: Props) {
       <section className="results__section">
         <h3>רק אצל {ownName} ({result.ownOnly.length})</h3>
         {result.ownOnly.length ? (
-          <OwnOnlyTable lines={result.ownOnly} excel={excel} />
+          <OwnOnlyTable lines={result.ownOnly} ownDiscountPct={totals.ownDiscountPct} excel={excel} />
         ) : (
           <p className="empty">כל שורות {ownName} הוצמדו.</p>
         )}

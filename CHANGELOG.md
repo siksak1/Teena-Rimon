@@ -4,6 +4,7 @@ Versions follow semver. The version shown in the app footer comes from the root 
 
 ## Unreleased
 
+- Partial sums: clicking rows in the results tables (Shift-click for a range) shows their total kg and ₪ in a bar fixed to the bottom of the screen, split into supplier / Teena-Rimon / difference when both sides are selected. Own lines count at their net after the commercial discount. The selection is not exported; Esc or "נקה" clears it.
 - Suppliers with no parser of their own are read by two generic parsers (config `genericFallback`, on by default; configVersion 4): any AGROLINE supplier invoice, named from the "לכבוד:" line of the wholesaler's draft (first: Meshek Dudu), and a table parser that finds the item columns by quantity × price × (1 − discount) = total and accepts the result only when it adds up to a printed total. On every supplier sample with a dedicated parser it reads the same lines, field by field. The results page marks such invoices "פורמט כללי".
 - PDFs printed with "Microsoft Print to PDF" (Hebrew letters missing from the text layer) are read: the missing text is rendered and read by OCR, the amounts still come from the text. Without OCR they are refused with the new error code `TEXT_LAYER_BROKEN`.
 - New dev dependency `@napi-rs/canvas` (pdf.js page rendering in the Node tests).

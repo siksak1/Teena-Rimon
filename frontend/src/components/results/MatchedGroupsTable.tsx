@@ -3,6 +3,8 @@ import type { MatchGroup } from "@core/model.js";
 import customer from "@customer-config";
 import { rowMatches, useColumnFilters } from "./filtering";
 import { ClearFilters, FilterableHead } from "./ColumnFilters";
+import { ownKey, supplierKey, type SelItem, type SelTable } from "./selection";
+import { SelRow } from "./SumBar";
 import {
   FLAG_LABEL,
   money,
@@ -124,6 +126,14 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", g
     ? groups.filter((g) => lineCells(g, ownDiscountPct, growers).some((cells) => rowMatches(cells, filters.values)))
     : groups;
 
+  /** The line rows on screen, in order, for the partial sums. */
+  const selTable: SelTable = new Map<string, SelItem>(
+    visible.filter(isOpen).flatMap((g) => [
+      ...g.supplierLines.map((l) => [supplierKey(l.id), { side: "supplier", quantity: l.quantity, amount: l.lineTotal }] as const),
+      ...g.ownLines.map((l) => [ownKey(l.id), { side: "own", quantity: l.quantity, amount: ownNet(l, ownDiscountPct) }] as const),
+    ]),
+  );
+
   return (
     <>
       <div className="table-tools">
@@ -180,50 +190,60 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", g
             return (
               <tbody key={g.id} className={`grp ${groupTone(g, tone)}`}>
                 {g.supplierLines.map((l, i) => (
-                  <tr key={l.id} className="side-supplier">
-                    {i === 0 && (
-                      <td rowSpan={rows} className="grp-id mono">
-                        {toggleButton}
-                        {g.id}
-                      </td>
+                  <SelRow key={l.id} selKey={supplierKey(l.id)} table={selTable} className="side-supplier">
+                    {(box) => (
+                      <>
+                        {i === 0 && (
+                          <td rowSpan={rows} className="grp-id mono">
+                            {toggleButton}
+                            {g.id}
+                          </td>
+                        )}
+                        <td>
+                          {box}
+                          <span className="side-tag side-tag--supplier">ספק</span>
+                        </td>
+                        {growers && <td className="grower">{l.grower}</td>}
+                        <td>{shortDate(l.date)}</td>
+                        <td className="mono">{supplierRef(l)}</td>
+                        <td className="name">
+                          {supplierItem(l)}
+                          {l.ocrUncertain && (
+                            <span className="ocr-mark" title={`לא אומת בזיהוי התווים: ${ocrUncertainFields(l)}`}>
+                              {OCR_MARK}
+                            </span>
+                          )}
+                        </td>
+                        <td className="mono">{num(l.packages)}</td>
+                        <td className="mono">{num(l.quantity)}</td>
+                        <td className="mono">
+                          {num(l.unitPrice)}
+                          {Math.abs(l.discountPct - ownDiscountPct) > 0.0005 && <small> (הנחה {num(l.discountPct * 100)}%)</small>}
+                        </td>
+                        <td className="mono">{money(l.lineTotal)}</td>
+                      </>
                     )}
-                    <td>
-                      <span className="side-tag side-tag--supplier">ספק</span>
-                    </td>
-                    {growers && <td className="grower">{l.grower}</td>}
-                    <td>{shortDate(l.date)}</td>
-                    <td className="mono">{supplierRef(l)}</td>
-                    <td className="name">
-                      {supplierItem(l)}
-                      {l.ocrUncertain && (
-                        <span className="ocr-mark" title={`לא אומת בזיהוי התווים: ${ocrUncertainFields(l)}`}>
-                          {OCR_MARK}
-                        </span>
-                      )}
-                    </td>
-                    <td className="mono">{num(l.packages)}</td>
-                    <td className="mono">{num(l.quantity)}</td>
-                    <td className="mono">
-                      {num(l.unitPrice)}
-                      {Math.abs(l.discountPct - ownDiscountPct) > 0.0005 && <small> (הנחה {num(l.discountPct * 100)}%)</small>}
-                    </td>
-                    <td className="mono">{money(l.lineTotal)}</td>
-                  </tr>
+                  </SelRow>
                 ))}
                 {g.ownLines.map((l) => (
-                  <tr key={l.id} className="side-tr">
-                    <td>
-                      <span className="side-tag side-tag--tr">{customer.shortName}</span>
-                    </td>
-                    {growers && <td className="grower">{l.grower}</td>}
-                    <td>{shortDate(l.date)}</td>
-                    <td className="mono">{l.supplierRef || "—"}</td>
-                    <td className="name">{ownItem(l)}</td>
-                    <td className="mono">{num(l.packages)}</td>
-                    <td className="mono">{num(l.quantity)}</td>
-                    <td className="mono">{num(l.unitPrice)}</td>
-                    <td className="mono">{money(ownNet(l, ownDiscountPct))}</td>
-                  </tr>
+                  <SelRow key={l.id} selKey={ownKey(l.id)} table={selTable} className="side-tr">
+                    {(box) => (
+                      <>
+                        <td>
+                          {box}
+                          <span className="side-tag side-tag--tr">{customer.shortName}</span>
+                        </td>
+                        {growers && <td className="grower">{l.grower}</td>}
+                        <td>{shortDate(l.date)}</td>
+                        <td className="mono">{l.supplierRef || "—"}</td>
+                        <td className="name">{ownItem(l)}</td>
+                        <td className="mono">{num(l.packages)}</td>
+                        <td className="mono">{num(l.quantity)}</td>
+                        <td className="mono">{num(l.unitPrice)}</td>
+                        <td className="mono">{money(ownNet(l, ownDiscountPct))}</td>
+                      </>
+                    )}
+                  </SelRow>
                 ))}
                 <tr className="grp-summary">
                   <td colSpan={labelSpan}>
