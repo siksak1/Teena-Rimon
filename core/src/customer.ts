@@ -68,6 +68,13 @@ export const customerConfigSchema = z.strictObject({
   }),
   /** Supplier parser ids (`SUPPLIER_PARSERS`) this customer gets; others are reported as unsupported. */
   suppliers: z.array(z.string().min(1)).min(1),
+  /**
+   * Read invoices from suppliers not in `suppliers` with the generic parsers
+   * (any AGROLINE supplier, then the column-dictionary table parser). They
+   * accept a result only when its rows add up to the printed totals. On
+   * unless set to false.
+   */
+  genericFallback: z.boolean().optional(),
   /** Supplier fields the clerk may have typed into the own document's reference ("אסמכתא"). */
   referenceRules: z.array(referenceRule).min(1),
   tolerances,

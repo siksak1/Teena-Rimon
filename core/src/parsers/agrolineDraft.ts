@@ -3,6 +3,7 @@ import type { OwnInvoice, OwnLine } from "../model.js";
 import {
   cellText,
   columnsFromHeader,
+  fuzzyIncludes,
   readRow,
   type ColumnSpec,
   type Columns,
@@ -25,16 +26,18 @@ type Key =
   | "total";
 
 const COLUMNS: ColumnSpec<Key>[] = [
-  { key: "date", header: /^תאריך$/ },
-  { key: "ref", header: /^אסמכתא$/ },
-  { key: "product", header: /^תוצרת\/זן\/איכות$/ },
-  { key: "size", header: /^גודל$/ },
-  { key: "packageType", header: /^אריזה$/ },
-  { key: "packages", header: /^כמות$/ },
-  { key: "quantity", header: /^משקל\/יחידות$/ },
-  { key: "unitPrice", header: /^מחיר$/ },
-  { key: "total", header: /^סכום$/ },
+  { key: "date", header: /^תאריך$/, label: "תאריך" },
+  { key: "ref", header: /^אסמכתא$/, label: "אסמכתא" },
+  { key: "product", header: /^תוצרת\/זן\/איכות$/, label: "תוצרת/זן/איכות" },
+  { key: "size", header: /^גודל$/, label: "גודל" },
+  { key: "packageType", header: /^אריזה$/, label: "אריזה" },
+  { key: "packages", header: /^כמות$/, label: "כמות" },
+  { key: "quantity", header: /^משקל\/יחידות$/, label: "משקל/יחידות" },
+  { key: "unitPrice", header: /^מחיר$/, label: "מחיר" },
+  { key: "total", header: /^סכום$/, label: "סכום" },
 ];
+
+const TITLE = "חשבונית טיוטה";
 
 /**
  * A wholesaler's AGROLINE draft ("חשבונית טיוטה") — the same layout for every
@@ -47,7 +50,9 @@ export const agrolineDraftParser: OwnDocumentParser = {
   // Some suppliers (e.g. D. Hai) also print from AGROLINE, so only the draft
   // title identifies the wholesaler's side.
   detect(doc) {
-    return doc.text.includes("חשבונית טיוטה");
+    if (doc.text.includes(TITLE)) return true;
+    // Read back by OCR: allow a misread letter in the title.
+    return !!doc.repairedByOcr && doc.rows.slice(0, 15).some((r) => fuzzyIncludes(r, TITLE));
   },
 
   parse: parseAgrolineDraft,
@@ -61,7 +66,7 @@ function parseAgrolineDraft(doc: PdfDocument, customerName: string): OwnInvoice 
     let columns: Columns<Key> | null = null;
     for (const row of rows) {
       if (!columns) {
-        columns = columnsFromHeader(row, COLUMNS);
+        columns = columnsFromHeader(row, COLUMNS, { fuzzy: doc.repairedByOcr });
         continue;
       }
       const c = readRow(row, columns);
@@ -106,10 +111,21 @@ function parseAgrolineDraft(doc: PdfDocument, customerName: string): OwnInvoice 
     againstInvoice: doc.text.match(/כנגד חשבונית\s+(\d+)/)?.[1] ?? null,
     lines,
     printedGrossTotal,
+    counterparty: counterparty(doc),
     commercialDiscount,
     discountPct: gross ? commercialDiscount / gross : 0,
     warnings,
   };
+}
+
+/** "לכבוד: משק דודו מרום בע"מ (ע.מ. 513241455)" → name and VAT number. */
+function counterparty(doc: PdfDocument): OwnInvoice["counterparty"] {
+  const row = doc.rows.find((r) => /לכבוד\s*:/.test(r.text));
+  if (!row) return undefined;
+  const text = row.text.replace(/.*לכבוד\s*:\s*/, "");
+  const vatId = text.match(/(\d{9})/)?.[1] ?? null;
+  const name = text.replace(/\(?\s*ע\.?\s*מ\.?.*$/, "").replace(/[\s(]+$/, "").trim();
+  return name ? { name, vatId } : undefined;
 }
 
 export function missingDiscountWarning(customerName: string): string {
@@ -121,7 +137,8 @@ export function missingDiscountWarning(customerName: string): string {
  * label (baselines can differ by a couple of points).
  */
 function footerAmount(doc: PdfDocument, label: string): number | null {
-  const labelRow = doc.rows.find((r) => r.text.includes(label));
+  const labelRow =
+    doc.rows.find((r) => r.text.includes(label)) ?? (doc.repairedByOcr ? doc.rows.find((r) => fuzzyIncludes(r, label)) : undefined);
   if (!labelRow) return null;
   const numeric = doc.rows
     .filter((r: Row) => r.page === labelRow.page && Math.abs(r.y - labelRow.y) <= 3)

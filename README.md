@@ -16,7 +16,7 @@ Reconciles a supplier's consolidated invoice against the wholesaler's own docume
 
 ### Per-customer configuration
 
-The engine and parsers are shared; what differs between wholesalers lives in `customers/<slug>/config.json`, validated by the zod schema in `core/src/customer.ts`: display name, own-document format and label, which supplier parsers the customer gets (`suppliers`), which supplier fields the clerk records as the reference (`referenceRules`), matching tolerances, agreed discounts for suppliers that print none (`unprintedDiscounts`, e.g. Bananot Carmel at 12%), offsetting on/off, and additions to the product dictionary. Bump `configVersion` on every change; the footer shows it next to the app version.
+The engine and parsers are shared; what differs between wholesalers lives in `customers/<slug>/config.json`, validated by the zod schema in `core/src/customer.ts`: display name, own-document format and label, which supplier parsers the customer gets (`suppliers`), whether other suppliers are read by the generic parsers (`genericFallback`, on unless `false`), which supplier fields the clerk records as the reference (`referenceRules`), matching tolerances, agreed discounts for suppliers that print none (`unprintedDiscounts`, e.g. Bananot Carmel at 12%), offsetting on/off, and additions to the product dictionary. Bump `configVersion` on every change; the footer shows it next to the app version.
 
 Each build is for one customer, and only that customer's config is bundled:
 
@@ -38,6 +38,8 @@ Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core
 - The CSP lets the page fetch nothing but analytics, so the decoder, Tesseract and its models (~7 MB as base64, `bundledBinaries` in `frontend/vite.config.ts`) ship as the app's own script chunks, loaded only when a scan is uploaded. The CSP's `'wasm-unsafe-eval'` lets the page compile this WebAssembly; it does not allow `eval()` of JavaScript.
 - The tests run the same OCR in Node (`core/test/scanSupport.ts`).
 
+**PDFs with no Hebrew text.** A PDF printed with "Microsoft Print to PDF" embeds its fonts without a Unicode map for Hebrew: digits and amounts extract, every Hebrew letter comes out blank (e.g. `sample_data/גליל טטיט.pdf`). `loadPdf` flags such a document (`missingText`), and `core/src/pdf/repair.ts` renders each page with pdf.js, whites out the text that did extract and the ruling lines, and reads the rest word by word with the same Tesseract (`heb`). The words are placed where they are printed, so the usual parsers read the document as if it were whole; header and footer labels are matched with a small edit-distance tolerance (`fuzzyEquals` in `layout.ts`). Amounts always come from the exact text layer. The document carries a warning that its names were read by OCR. Without OCR available the file is refused with `TEXT_LAYER_BROKEN` and a hint to print with "Save as PDF" instead.
+
 ## Quick start
 
 ```bash
@@ -52,7 +54,7 @@ npm run e2e          # production build in Chromium under the production headers
 After each comparison the app sends one event to PostHog Cloud EU (`frontend/src/analytics.ts`); the payload is built in `core/src/analytics.ts` and nothing else is ever sent:
 
 - `reconciliation_completed`: customer slug, app version, config version, browser family (e.g. `chrome-129`), line counts on both sides, matched groups, groups with gaps, unmatched rows on each side, offset applied, whether the supplier invoice was a scan and how many of its rows OCR could not confirm, parser-warning count, parse and reconcile time in ms, and — only when the customer's config sets `analytics.sendDiscrepancyAmount` — the invoice's net gap rounded to ₪10.
-- `reconciliation_failed`: the same identifying fields plus a fixed `error_code` (`NOT_PDF`, `FILES_SWAPPED`, `OWN_DOC_NOT_RECOGNIZED`, `UNSUPPORTED_SUPPLIER`, `NO_LINES`, `SCAN_UNREADABLE`, `INTERNAL`). Error messages are never sent: they contain file names.
+- `reconciliation_failed`: the same identifying fields plus a fixed `error_code` (`NOT_PDF`, `FILES_SWAPPED`, `OWN_DOC_NOT_RECOGNIZED`, `UNSUPPORTED_SUPPLIER`, `NO_LINES`, `SCAN_UNREADABLE`, `TEXT_LAYER_BROKEN`, `INTERNAL`). Error messages are never sent: they contain file names.
 
 `distinct_id` is the customer slug and person profiles are off, so no individual user is identified. Requests carry no cookies and no `Referer` (the secret URL path never leaves the page). Sending is fire-and-forget, and the dev server only logs the payload to the console. `core/test/analytics.test.ts` pins the exact property list and checks, on every sample pair, that no supplier name, invoice or document number, product name or file name appears in the payload. In the PostHog project settings, keep "Discard client IP data" on.
 
@@ -87,6 +89,15 @@ GitHub Actions (`.github/workflows/ci.yml`) runs `npm test`, the typecheck/build
 - **Bananot Carmel (בננות כרמל)** — `core/src/parsers/carmel.ts`
 - **Har-Kor (הר-קור)** — `core/src/parsers/harKor.ts`. Scanned invoices only, read by OCR (see above). It is detected by its VAT number, either in the scanner's own text layer (too garbled to parse) or by OCR of the page header. Product short forms ("ש", "נ") are spelled out, and OCR'd names are snapped to Har-Kor's product list.
 - **Levi Tzadok (לוי צדוק ובניו)** — `core/src/parsers/levi.ts` (fixed-width printout, one cell per word; dates without a year; pallet rows skipped)
+
+### Suppliers with no parser of their own (`genericFallback`)
+
+When no dedicated parser recognises the supplier invoice, two generic parsers are tried, in this order (`FALLBACK_PARSERS` in `registry.ts`):
+
+- **Any AGROLINE supplier** — `agrolineGenericParser` in `core/src/parsers/agroline.ts`. Many small suppliers print "חשבונית מס / חשבון פרופורמה (שווק)" from AGROLINE in the same layout; the supplier is identified by VAT number, and named after the "לכבוד:" line of the wholesaler's draft (the name itself is in AGROLINE's logo). Sample: Meshek Dudu (משק דודו).
+- **Any table** — `genericTableParser` in `core/src/parsers/generic.ts`. It finds the item rows by arithmetic: three amounts with quantity × price × (1 − discount) = line total, read right to left, in the price and total columns most rows share (pallet and packaging tables are laid out differently and drop out). The discount is a percentage on the row, one printed in the footer, or the ratio of a second, discounted price column. Column names above the table (`genericHeaders.ts`) label the date, delivery document, booklet reference, SKU, description and package columns; group rows ("תעודה: …, מספר פנקס: …") and blank cells carry the date and document down. The result is accepted only when the lines add up to a total printed on the invoice (with or without the pallet rows); otherwise the invoice is refused.
+
+`core/test/generic.test.ts` runs the table parser on every supplier sample that has a dedicated parser and requires the same lines, field by field. It reproduces all of them except the Har-Kor scan. The results page marks generically read invoices "פורמט כללי".
 
 The supplier is detected from the PDF (VAT number / company name), among the parsers the customer's config enables. To add a supplier, write a `SupplierParser` (see `core/src/parsers/types.ts`), register it in `SUPPLIER_PARSERS` in `core/src/parsers/registry.ts`, and add its id to `suppliers` in the configs of the customers who need it. Each parser checks that its lines add up to the total printed on the PDF and warns otherwise.
 

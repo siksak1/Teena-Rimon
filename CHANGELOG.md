@@ -4,6 +4,10 @@ Versions follow semver. The version shown in the app footer comes from the root 
 
 ## Unreleased
 
+- Suppliers with no parser of their own are read by two generic parsers (config `genericFallback`, on by default; configVersion 4): any AGROLINE supplier invoice, named from the "לכבוד:" line of the wholesaler's draft (first: Meshek Dudu), and a table parser that finds the item columns by quantity × price × (1 − discount) = total and accepts the result only when it adds up to a printed total. On every supplier sample with a dedicated parser it reads the same lines, field by field. The results page marks such invoices "פורמט כללי".
+- PDFs printed with "Microsoft Print to PDF" (Hebrew letters missing from the text layer) are read: the missing text is rendered and read by OCR, the amounts still come from the text. Without OCR they are refused with the new error code `TEXT_LAYER_BROKEN`.
+- New dev dependency `@napi-rs/canvas` (pdf.js page rendering in the Node tests).
+
 - Excel mode: a PDF / Excel switch compares the supplier's grower sales report with Teena-Rimon's weighings report (both .xlsx, many growers per file). Growers are paired across the reports, weighings that add up to one sale form a group, and the results and export gain a grower column. Config: `excel` block, `tolerances.sumToleranceRel`; configVersion 3.
 - Analytics: error codes `NOT_EXCEL` and `MISSING_COLUMN`.
 - A delivery document whose rows all matched and whose weight and price gaps add up to at most 1 ₪ is no longer shown as a gap; its rows get the note "הפרש זניח בתעודה כולה". Package-count, discount, name and reference gaps are still reported. Config: `tolerances.documentToleranceNis` (1 for Teena-Rimon; unset = off).

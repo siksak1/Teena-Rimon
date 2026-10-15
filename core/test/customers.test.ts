@@ -33,7 +33,7 @@ describe("customer configs", () => {
     expect(() => supplierParsersFor({ ...TEENA_RIMON, suppliers: ["granot", "nope"] })).toThrow('"nope"');
   });
 
-  it("treats a supplier the customer has not enabled as unsupported", async () => {
+  it("treats a supplier the customer has not enabled as unsupported when generic parsing is off", async () => {
     const promise = extractInvoices(
       {
         ownPdf: await readSample(PAIRS.granot.own),
@@ -41,7 +41,7 @@ describe("customer configs", () => {
         ownFileName: "a.pdf",
         supplierFileName: "b.pdf",
       },
-      { ...TEENA_RIMON, suppliers: ["shivuk-hahof"] },
+      { ...TEENA_RIMON, suppliers: ["shivuk-hahof"], genericFallback: false },
     );
     await expect(promise).rejects.toThrow("אינו נתמך עדיין. ספקים נתמכים: שיווק החוף");
   });

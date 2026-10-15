@@ -1,0 +1,252 @@
+{
+  "supplier": {
+    "parser": "agroline-513241455",
+    "invoiceNumber": "31267",
+    "lines": 26,
+    "printedItemsTotal": 66463.62,
+    "warnings": []
+  },
+  "own": {
+    "documentNumber": "10031",
+    "againstInvoice": "31267",
+    "lines": 18,
+    "commercialDiscount": 9013.5,
+    "discountPct": 0.12,
+    "warnings": []
+  },
+  "totals": {
+    "supplierNet": 66463.32,
+    "ownGross": 75112.5,
+    "ownDiscountPct": 0.12,
+    "ownNet": 66099,
+    "diff": -364.32
+  },
+  "groups": [
+    {
+      "rows": "S23+S26+S24+S25→T17",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -140.8,
+      "quantityDiff": -32,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 881, תאנה ורימון 849 (-32)"
+      ]
+    },
+    {
+      "rows": "S7→T3",
+      "flags": [
+        "quantity",
+        "packages"
+      ],
+      "netDiff": -135.52,
+      "quantityDiff": -11,
+      "packagesDiff": -1,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 564, תאנה ורימון 553 (-11)",
+        "אריזות: ספק 80, תאנה ורימון 79"
+      ]
+    },
+    {
+      "rows": "S6→T4",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -31.68,
+      "quantityDiff": -6,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 562, תאנה ורימון 556 (-6)"
+      ]
+    },
+    {
+      "rows": "S11→T7",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -31.68,
+      "quantityDiff": -6,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 862, תאנה ורימון 856 (-6)"
+      ]
+    },
+    {
+      "rows": "S18→T13",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": 28.16,
+      "quantityDiff": 4,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 575, תאנה ורימון 579 (+4)"
+      ]
+    },
+    {
+      "rows": "S1+S2→T1",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -21.12,
+      "quantityDiff": -3,
+      "packagesDiff": 0,
+      "dateDelta": 2,
+      "notes": [
+        "משקל: ספק 567, תאנה ורימון 564 (-3)"
+      ]
+    },
+    {
+      "rows": "S22→T16",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -18.48,
+      "quantityDiff": -7,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 742, תאנה ורימון 735 (-7)"
+      ]
+    },
+    {
+      "rows": "S5→T5",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -8.8,
+      "quantityDiff": -2,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 643, תאנה ורימון 641 (-2)"
+      ]
+    },
+    {
+      "rows": "S3+S4→T2",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -5.72,
+      "quantityDiff": -1,
+      "packagesDiff": 0,
+      "dateDelta": 2,
+      "notes": [
+        "משקל: ספק 760, תאנה ורימון 759 (-1)"
+      ]
+    },
+    {
+      "rows": "S19→T14",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": 5.72,
+      "quantityDiff": 1,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": [
+        "משקל: ספק 705, תאנה ורימון 706 (+1)"
+      ]
+    },
+    {
+      "rows": "S8+S9+S10→T6",
+      "flags": [
+        "quantity"
+      ],
+      "netDiff": -4.4,
+      "quantityDiff": -1,
+      "packagesDiff": 0,
+      "dateDelta": 0,
+      "notes": [
+        "משקל: ספק 879, תאנה ורימון 878 (-1)"
+      ]
+    },
+    {
+      "rows": "S12→T11",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S13→T10",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S14→T8",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S15→T9",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S16+S17→T18",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S20→T12",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    },
+    {
+      "rows": "S21→T15",
+      "flags": [],
+      "netDiff": 0,
+      "quantityDiff": 0,
+      "packagesDiff": 0,
+      "dateDelta": 1,
+      "notes": []
+    }
+  ],
+  "supplierOnly": [],
+  "ownOnly": [],
+  "offset": {
+    "applies": false,
+    "groups": []
+  },
+  "dictionarySuggestions": [
+    "אינטר",
+    "ב",
+    "טרייפק",
+    "טרפק",
+    "יוריקה",
+    "ניוהול",
+    "צבעוני",
+    "קיט",
+    "קרהקרה",
+    "רשת"
+  ]
+}

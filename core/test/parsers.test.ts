@@ -3,6 +3,7 @@ import { detectScanned, extractInvoices } from "../src/extract.js";
 import { ExtractionError } from "../src/errors.js";
 import { confirmAmounts } from "../src/parsers/validate.js";
 import { supplierParsersFor } from "../src/parsers/registry.js";
+import { loadPdf } from "../src/pdf/layout.js";
 import { loadScan } from "../src/pdf/scan.js";
 import { parseDate, round2 } from "../src/pdf/text.js";
 import { extractSample, PAIRS, readSample, TEENA_RIMON } from "./helpers.js";
@@ -128,6 +129,40 @@ describe("Achim Menashri parser (AGROLINE)", () => {
     expect(own.lines).toHaveLength(33);
     // The sample draft was issued against another Menashri invoice.
     expect(own.warnings).toEqual([expect.stringContaining("כנגד חשבונית 20231")]);
+  });
+});
+
+describe("any AGROLINE supplier (Meshek Dudu, no parser of its own)", () => {
+  it("reads the invoice and takes the supplier's name from the draft", async () => {
+    const { supplier, own } = await extractSample("dudu");
+    expect(supplier).toMatchObject({
+      supplierId: "agroline-513241455",
+      supplierName: 'משק דודו מרום בע"מ',
+      vatId: "513241455",
+      generic: "agroline",
+      invoiceNumber: "31267",
+      printedItemsTotal: 66463.62,
+      warnings: [],
+    });
+    expect(supplier.lines).toHaveLength(26);
+    expect(round2(supplier.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0))).toBe(75526.5);
+    expect(supplier.lines[0]).toMatchObject({ date: "2026-10-02", docNumber: "62985", bookRef: "1969", packages: 60, quantity: 425, unitPrice: 8, discountPct: 0.12 });
+    expect(own.counterparty).toEqual({ name: 'משק דודו מרום בע"מ', vatId: "513241455" });
+  });
+
+  it("finds a package count printed inside the package-type cell", async () => {
+    const { supplier } = await extractSample("dudu");
+    expect(supplier.lines.find((l) => l.quantity === 643)?.packages).toBe(54);
+  });
+
+  it("is not used when the customer turns generic parsing off", async () => {
+    const promise = extractInvoices({
+      ownPdf: await readSample(PAIRS.dudu.own),
+      supplierPdf: await readSample(PAIRS.dudu.supplier),
+      ownFileName: "a.pdf",
+      supplierFileName: "b.pdf",
+    }, { ...TEENA_RIMON, genericFallback: false });
+    await expect(promise).rejects.toMatchObject({ code: "UNSUPPORTED_SUPPLIER" });
   });
 });
 
@@ -393,6 +428,68 @@ describe("Har HaKor (scanned, read by OCR)", () => {
     const pair = PAIRS.harKor;
     const input = { ownPdf: await readSample(pair.own), supplierPdf: await readSample(pair.supplier), ownFileName: pair.own, supplierFileName: pair.supplier };
     await expect(extractInvoices(input, TEENA_RIMON)).rejects.toThrow("סרוקה");
+  });
+});
+
+describe("draft printed with Microsoft Print to PDF (Hebrew read by OCR)", () => {
+  const TATIT = "sample_data/גליל טטיט.pdf";
+  const extractTatit = async (scan: typeof NODE_SCAN_SUPPORT | undefined) =>
+    extractInvoices(
+      {
+        ownPdf: await readSample(TATIT),
+        supplierPdf: await readSample(PAIRS.galil.supplier),
+        ownFileName: "draft.pdf",
+        supplierFileName: "supplier.pdf",
+      },
+      TEENA_RIMON,
+      scan,
+    );
+
+  it("notices that the Hebrew text is missing", async () => {
+    const doc = await loadPdf(await readSample(TATIT));
+    expect(doc.missingText).toBeDefined();
+    expect(doc.text).not.toContain("טיוטה");
+  });
+
+  it("never flags a normal PDF", async () => {
+    for (const pair of Object.values(PAIRS)) {
+      if (pair.format === "excel") continue;
+      for (const file of [pair.own, pair.supplier]) {
+        expect((await loadPdf(await readSample(file))).missingText, file).toBeUndefined();
+      }
+    }
+  });
+
+  it("reads the draft: exact amounts, and names by OCR", async () => {
+    const { own } = await extractTatit(NODE_SCAN_SUPPORT);
+    expect(own.documentNumber).toBe("10032");
+    expect(own.againstInvoice).toBe("266007971");
+    expect(own.lines).toHaveLength(6);
+    expect(sum(own.lines)).toBe(12343.7);
+    expect(own.printedGrossTotal).toBe(12343.7);
+    expect(own.lines[0]).toMatchObject({
+      date: "2026-09-28",
+      ownDocNumber: "23767",
+      supplierRef: "26420",
+      packages: 80,
+      quantity: 523,
+      unitPrice: 5,
+      lineTotal: 2615,
+    });
+    expect(own.lines.map((l) => l.product)).toEqual([
+      "מנגו עומר",
+      "מנגו",
+      "פומלית",
+      "אבוקדו אטינגר",
+      "אבוקדו אטינגר",
+      "סלק אדום",
+    ]);
+    expect(own.warnings.join()).toContain("OCR");
+  });
+
+  it("asks for a proper PDF when OCR is not available", async () => {
+    const promise = extractTatit(undefined);
+    await expect(promise).rejects.toMatchObject({ code: "TEXT_LAYER_BROKEN" });
   });
 });
 

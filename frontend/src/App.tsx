@@ -16,6 +16,10 @@ type UiPhase = "idle" | "extracting" | "ready" | "error";
 type Mode = "pdf" | "excel";
 
 const supplierNames = supplierParsersFor(customer).map((p) => p.displayName).join(", ");
+const supplierNote =
+  customer.genericFallback === false
+    ? `ספקים נתמכים: ${supplierNames}`
+    : `ספקים עם קורא ייעודי: ${supplierNames} · חשבוניות של ספקים אחרים נקראות לפי מבנה הטבלה`;
 
 export default function App() {
   const [mode, setMode] = useState<Mode>("pdf");
@@ -23,7 +27,7 @@ export default function App() {
   const [supplierFile, setSupplierFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<UiPhase>("idle");
   const [error, setError] = useState<string | null>(null);
-  /** Pages of a scanned supplier invoice read so far, while OCR runs. */
+  /** Pages read so far while OCR runs (a scanned invoice, or a PDF whose Hebrew text is missing). */
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<{
     extraction: ExtractionResult;
@@ -116,7 +120,7 @@ export default function App() {
           </div>
         </div>
         <p className="brand-bar__note">
-          הקבצים נקראים בדפדפן בלבד · ספקים נתמכים: {supplierNames}
+          הקבצים נקראים בדפדפן בלבד · {supplierNote}
         </p>
       </header>
 
@@ -194,7 +198,7 @@ export default function App() {
           {phase === "extracting" && (
             <span className="actions__status" role="status">
               {scanProgress
-                ? `קורא חשבונית סרוקה (זיהוי תווים)… עמוד ${Math.min(scanProgress.done + 1, scanProgress.total)} מתוך ${scanProgress.total}`
+                ? `קורא בזיהוי תווים (OCR)… עמוד ${Math.min(scanProgress.done + 1, scanProgress.total)} מתוך ${scanProgress.total}`
                 : "קורא את הקבצים…"}
             </span>
           )}

@@ -57,7 +57,7 @@ test("is not indexable and runs under the production security headers", async ({
   expect(headers["content-security-policy"]).toContain("connect-src https://eu.i.posthog.com;");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow, noarchive");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("השוואת חשבונית ספק מול תאנה ורימון");
-  await expect(page.locator(".site-foot")).toContainText("תצורה 3");
+  await expect(page.locator(".site-foot")).toContainText("תצורה 4");
 });
 
 test("reconciles real invoices in the browser; only a counts-only event leaves the page", async ({ page, baseURL }) => {
@@ -95,6 +95,36 @@ test("reads a scanned invoice by OCR in the browser; nothing but the counts-only
   });
   expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]|111081/);
   // The OCR engine and its models are the app's own script chunks: no fetch, no CSP exception.
+  expect(unexpectedRequests(watch, baseURL!)).toEqual([]);
+  expect(await watch.violations()).toEqual([]);
+  expect(watch.consoleErrors).toEqual([]);
+});
+
+test("reads a draft printed with Microsoft Print to PDF by OCR in the browser", async ({ page, baseURL }) => {
+  const watch = await open(page);
+  await compare(page, "גליל טטיט.pdf", "גליל שוק מקומי.pdf");
+
+  await expect(page.locator(".results h2")).toContainText("גליל שוק מקומי", { timeout: 60_000 });
+  await expect(page.locator(".results__meta")).toContainText("10032");
+  await expect(page.locator(".banner--warn")).toContainText("נקרא ב-OCR");
+  await expect(page.getByText("סלק אדום").first()).toBeVisible();
+
+  // Rendering the page for OCR is local: no fetch, no CSP exception.
+  expect(unexpectedRequests(watch, baseURL!)).toEqual([]);
+  expect(await watch.violations()).toEqual([]);
+  expect(watch.consoleErrors).toEqual([]);
+});
+
+test("reads a supplier with no parser of its own and names it from the draft", async ({ page, baseURL }) => {
+  const watch = await open(page);
+  await compare(page, "משק דודו אצל תאנה ורימון.pdf", "משק דודו.pdf");
+
+  await expect(page.locator(".results h2")).toContainText('משק דודו מרום בע"מ · חשבונית 31267');
+  await expect(page.locator(".eyebrow .chip")).toHaveText("פורמט כללי");
+  await expect(page.locator(".count-strip")).toContainText("רק אצל הספק: 0");
+
+  await expect.poll(() => watch.analytics.length).toBe(1);
+  expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]|31267|513241455/);
   expect(unexpectedRequests(watch, baseURL!)).toEqual([]);
   expect(await watch.violations()).toEqual([]);
   expect(watch.consoleErrors).toEqual([]);

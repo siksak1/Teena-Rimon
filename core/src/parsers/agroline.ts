@@ -48,10 +48,10 @@ type AgrolineSupplier = { id: string; displayName: string; vatId: string };
  * "חשבונית מס (שווק)"). Every row carries its own date and delivery number
  * ("ת.משלוח"). Line totals are printed before the discount, which is applied
  * once in the footer ("הנחה 12.0%"); the footer starts at "פדיון".
- * The wholesaler's own drafts come from AGROLINE too, so detect by VAT id only.
+ * The wholesaler's own drafts come from AGROLINE too, so a named supplier is
+ * detected by VAT id only.
  */
 function agrolineParser({ id, displayName, vatId }: AgrolineSupplier): TextSupplierParser {
-  const label = `חשבונית ${displayName}`;
   return {
     id,
     displayName,
@@ -60,71 +60,108 @@ function agrolineParser({ id, displayName, vatId }: AgrolineSupplier): TextSuppl
       return doc.text.includes(vatId);
     },
 
-    parse(doc: PdfDocument): SupplierInvoice {
-      const warnings: string[] = [];
-      const discountPct = footerDiscount(doc);
-      if (discountPct == null) warnings.push(`לא נמצאה "הנחה" ב${label} — ההשוואה מניחה 0%`);
-      const pct = discountPct ?? 0;
-
-      const lines: SupplierLine[] = [];
-      let grossSum = 0;
-
-      pages: for (const rows of doc.pages) {
-        let columns: Columns<Key> | null = null;
-        for (const row of rows) {
-          if (!columns) {
-            columns = columnsFromHeader(row, COLUMNS);
-            continue;
-          }
-          if (row.text.includes("פדיון")) break pages;
-
-          const c = readRow(row, columns);
-          const date = parseDate(cellText(c.date));
-          const gross = parseNumber(cellText(c.total));
-          const quantity = parseNumber(cellText(c.quantity));
-          const unitPrice = parseNumber(cellText(c.unitPrice));
-          const description = cellText(c.description);
-          if (!date || gross == null || quantity == null || unitPrice == null || !description) continue;
-
-          grossSum += gross;
-          lines.push({
-            id: `S${lines.length + 1}`,
-            page: row.page,
-            date,
-            docNumber: cellText(c.doc) || null,
-            bookRef: cellText(c.bookRef) || null,
-            description,
-            variety: cellText(c.size),
-            sku: null,
-            packages: parseNumber(cellText(c.packages)),
-            quantity,
-            unit: "",
-            unitPrice,
-            discountPct: pct,
-            lineTotal: round2(gross * (1 - pct)),
-          });
-        }
-      }
-
-      checkTotal(`${label} (לפני הנחה)`, round2(grossSum), footerAmount(doc, "פדיון פטור"), warnings);
-      const printedItemsTotal = footerAmount(doc, 'סה"כ פדיון');
-      const netSum = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
-      if (printedItemsTotal != null && Math.abs(netSum - printedItemsTotal) > NET_DRIFT_TOLERANCE) {
-        warnings.push(
-          `${label}: סכום השורות אחרי הנחה (${netSum}) שונה מ"סה"כ פדיון" המודפס (${printedItemsTotal})`,
-        );
-      }
-
-      return {
-        supplierId: id,
-        supplierName: displayName,
-        invoiceNumber: invoiceNumber(doc),
-        invoiceDate: parseDate(doc.text.match(/תאריך\s+(\d{1,2}\/\d{1,2}\/\d{4})/)?.[1]),
-        lines,
-        printedItemsTotal,
-        warnings,
-      };
+    parse(doc) {
+      return parseAgroline(doc, { supplierId: id, supplierName: displayName, vatId });
     },
+  };
+}
+
+/**
+ * Any supplier that prints from AGROLINE, with no parser of its own: the
+ * layout is the same for all of them. The supplier is named by its VAT
+ * number; the name is not in the text (it is part of the printed logo), so
+ * extraction takes it from the wholesaler's draft, which is addressed to it.
+ */
+export const agrolineGenericParser: TextSupplierParser = {
+  id: "agroline",
+  displayName: "ספקים המפיקים חשבונית ב-AGROLINE",
+  fallback: true,
+
+  detect(doc) {
+    return /AGROLINE/i.test(doc.text) && doc.text.includes("(שווק)") && !doc.text.includes("חשבונית טיוטה");
+  },
+
+  parse(doc) {
+    const vatId = doc.text.match(/עוסק מורשה\s+(\d{9})/)?.[1] ?? doc.rows[0]?.text.match(/\b(\d{9})\b/)?.[1] ?? null;
+    const invoice = parseAgroline(doc, {
+      supplierId: `agroline-${vatId ?? "unknown"}`,
+      supplierName: vatId ? `ספק ${vatId}` : "ספק AGROLINE",
+      vatId,
+    });
+    return { ...invoice, generic: "agroline" };
+  },
+};
+
+type Identity = { supplierId: string; supplierName: string; vatId: string | null };
+
+function parseAgroline(doc: PdfDocument, { supplierId, supplierName, vatId }: Identity): SupplierInvoice {
+  const label = `חשבונית ${supplierName}`;
+  const warnings: string[] = [];
+  const discountPct = footerDiscount(doc);
+  if (discountPct == null) warnings.push(`לא נמצאה "הנחה" ב${label} — ההשוואה מניחה 0%`);
+  const pct = discountPct ?? 0;
+
+  const lines: SupplierLine[] = [];
+  let grossSum = 0;
+  const optional = new Set<Key>(["doc", "pallet", "bookRef", "size", "packageType", "packages"]);
+
+  pages: for (const rows of doc.pages) {
+    let columns: Columns<Key> | null = null;
+    for (const row of rows) {
+      if (!columns) {
+        columns = columnsFromHeader(row, COLUMNS) ?? columnsFromHeader(row, COLUMNS.filter((c) => !optional.has(c.key)));
+        continue;
+      }
+      if (row.text.includes("פדיון")) break pages;
+
+      const c = readRow(row, columns);
+      const date = parseDate(cellText(c.date));
+      const gross = parseNumber(cellText(c.total));
+      const quantity = parseNumber(cellText(c.quantity));
+      const unitPrice = parseNumber(cellText(c.unitPrice));
+      const description = cellText(c.description);
+      if (!date || gross == null || quantity == null || unitPrice == null || !description) continue;
+
+      grossSum += gross;
+      // "קר +18.5שק רש 54": the package count can run into the package type.
+      const packages = parseNumber(cellText(c.packages)) ?? parseNumber(cellText(c.packageType).match(/\s(\d+)$/)?.[1]);
+      lines.push({
+        id: `S${lines.length + 1}`,
+        page: row.page,
+        date,
+        docNumber: cellText(c.doc) || null,
+        bookRef: cellText(c.bookRef) || null,
+        description,
+        variety: cellText(c.size),
+        sku: null,
+        packages,
+        quantity,
+        unit: "",
+        unitPrice,
+        discountPct: pct,
+        lineTotal: round2(gross * (1 - pct)),
+      });
+    }
+  }
+
+  checkTotal(`${label} (לפני הנחה)`, round2(grossSum), footerAmount(doc, "פדיון פטור"), warnings);
+  const printedItemsTotal = footerAmount(doc, 'סה"כ פדיון');
+  const netSum = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
+  if (printedItemsTotal != null && Math.abs(netSum - printedItemsTotal) > NET_DRIFT_TOLERANCE) {
+    warnings.push(
+      `${label}: סכום השורות אחרי הנחה (${netSum}) שונה מ"סה"כ פדיון" המודפס (${printedItemsTotal})`,
+    );
+  }
+
+  return {
+    supplierId,
+    supplierName,
+    vatId,
+    invoiceNumber: invoiceNumber(doc),
+    invoiceDate: parseDate(doc.text.match(/תאריך\s+(\d{1,2}\/\d{1,2}\/\d{4})/)?.[1]),
+    lines,
+    printedItemsTotal,
+    warnings,
   };
 }
 

@@ -10,6 +10,11 @@ export interface TextSupplierParser {
   id: string;
   displayName: string;
   scanned?: false;
+  /**
+   * A generic parser, tried only after every supplier-specific one, when the
+   * customer's config allows it (`genericFallback`).
+   */
+  fallback?: true;
   /** Cheap check on the document text (VAT number / company name). */
   detect(doc: PdfDocument): boolean;
   parse(doc: PdfDocument): SupplierInvoice;

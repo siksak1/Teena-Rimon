@@ -45,6 +45,11 @@ export function ReconciliationView({ extraction, result }: Props) {
       <header className="results__header">
         <p className="eyebrow">
           תוצאות ההתאמה
+          {!excel && extraction.supplier.generic && (
+            <span className="chip" title="לספק זה אין קורא ייעודי: החשבונית נקראה לפי מבנה הטבלה, והסכומים אומתו מול הסה&quot;כ המודפס">
+              פורמט כללי
+            </span>
+          )}
         </p>
         {excel ? (
           <>

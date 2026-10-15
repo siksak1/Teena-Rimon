@@ -4,10 +4,10 @@
  * text lines go out by postMessage — nothing else leaves this worker.
  */
 import { createTesseract } from "@core/ocr/tesseract.js";
-import type { GrayImage, OcrLine, OcrModel } from "@core/ocr/types.js";
+import type { GrayImage, OcrLine, OcrOptions } from "@core/ocr/types.js";
 import { fromBase64, gunzip } from "./binary";
 
-export type OcrRequest = { id: number; image: GrayImage; options: { model: OcrModel; whitelist?: string } };
+export type OcrRequest = { id: number; image: GrayImage; options: OcrOptions };
 export type OcrResponse = { id: number; lines: OcrLine[] } | { id: number; error: string };
 
 const scope = self as unknown as {

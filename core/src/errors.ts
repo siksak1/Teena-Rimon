@@ -9,6 +9,7 @@ export type ExtractionErrorCode =
   | "UNSUPPORTED_SUPPLIER"
   | "NO_LINES"
   | "SCAN_UNREADABLE"
+  | "TEXT_LAYER_BROKEN"
   | "NOT_EXCEL"
   | "MISSING_COLUMN";
 

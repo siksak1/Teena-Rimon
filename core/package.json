@@ -18,6 +18,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "1.0.10",
     "@types/node": "^26.6.4",
     "typescript": "~6.0.2",
     "vitest": "^4.1.11"

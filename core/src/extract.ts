@@ -5,12 +5,13 @@ import { missingDiscountWarning } from "./parsers/agrolineDraft.js";
 import { DIGITS } from "./ocr/table.js";
 import type { GrayImage, ScanSupport } from "./ocr/types.js";
 import { loadPdf, type PdfDocument } from "./pdf/layout.js";
+import { repairMissingText } from "./pdf/repair.js";
 import { crop, loadScan } from "./pdf/scan.js";
 import { round2 } from "./pdf/text.js";
 import {
   detectSupplier,
   ownDocumentParser,
-  supplierParsersFor,
+  parsersToTry,
   UNSUPPORTED_SUPPLIERS,
 } from "./parsers/registry.js";
 import type { ScannedSupplierParser, SupplierParser } from "./parsers/types.js";
@@ -35,8 +36,8 @@ export async function extractInvoices(
   scan?: ScanSupport,
 ): Promise<ExtractionResult> {
   const ownParser = ownDocumentParser(config.ownDocument.format);
-  const supplierParsers = supplierParsersFor(config);
-  const [ownDoc, supplierDoc] = await Promise.all([
+  const supplierParsers = parsersToTry(config);
+  const [ownLoaded, supplierLoaded] = await Promise.all([
     loadPdf(input.ownPdf).catch(() => {
       throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.ownFileName}" כ-PDF`, "NOT_PDF");
     }),
@@ -44,6 +45,9 @@ export async function extractInvoices(
       throw new ExtractionError(`לא ניתן לקרוא את הקובץ "${input.supplierFileName}" כ-PDF`, "NOT_PDF");
     }),
   ]);
+
+  const ownDoc = await withMissingText(ownLoaded, input.ownPdf, input.ownFileName, scan);
+  const supplierDoc = await withMissingText(supplierLoaded, input.supplierPdf, input.supplierFileName, scan);
 
   if (!ownParser.detect(ownDoc)) {
     throw ownParser.detect(supplierDoc)
@@ -71,9 +75,11 @@ export async function extractInvoices(
     if (known) {
       throw new ExtractionError(`חשבונית ${known.name} אינה נתמכת: ${known.reason}`, "UNSUPPORTED_SUPPLIER");
     }
-    const supported = supplierParsers.map((p) => p.displayName).join(", ");
+    const supported = supplierParsers.filter((p) => !("fallback" in p && p.fallback)).map((p) => p.displayName).join(", ");
     throw new ExtractionError(
-      `הספק בקובץ "${input.supplierFileName}" אינו נתמך עדיין. ספקים נתמכים: ${supported}`,
+      config.genericFallback !== false
+        ? `לא ניתן לקרוא את חשבונית הספק בקובץ "${input.supplierFileName}" באופן אוטומטי: לא נמצאה בה טבלת פריטים שסכומיה מתאימים לסה"כ המודפס. ספקים עם פורמט ייעודי: ${supported}`
+        : `הספק בקובץ "${input.supplierFileName}" אינו נתמך עדיין. ספקים נתמכים: ${supported}`,
       "UNSUPPORTED_SUPPLIER",
     );
   }
@@ -99,6 +105,9 @@ export async function extractInvoices(
     throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser.displayName}`, "NO_LINES");
   }
   const own = ownParser.parse(ownDoc, config.displayName);
+  if (supplier.generic) nameFromOwnDocument(supplier, own, supplierDoc);
+  if (ownDoc.repairedByOcr) own.warnings.push(ocrRepairWarning(input.ownFileName));
+  if (supplierDoc.repairedByOcr) supplier.warnings.push(ocrRepairWarning(input.supplierFileName));
   const unprinted = config.unprintedDiscounts?.[parser.id];
   if (unprinted != null) applyUnprintedDiscount(supplier, own, unprinted, config.displayName);
 
@@ -117,6 +126,52 @@ export async function extractInvoices(
       supplierFileName: input.supplierFileName,
     },
   };
+}
+
+/**
+ * A generic parser knows the supplier by VAT number at best (AGROLINE prints
+ * the name inside the logo). The wholesaler's draft is addressed to the
+ * supplier by name and VAT number: use them when the invoice carries that
+ * VAT number.
+ */
+function nameFromOwnDocument(supplier: SupplierInvoice, own: OwnInvoice, supplierDoc: PdfDocument): void {
+  const party = own.counterparty;
+  if (!party?.vatId || !supplierDoc.text.includes(party.vatId)) return;
+  if (supplier.vatId && supplier.vatId !== party.vatId) return;
+  supplier.supplierName = party.name;
+  supplier.vatId = party.vatId;
+  if (supplier.generic === "table") supplier.supplierId = `generic-${party.vatId}`;
+}
+
+/**
+ * A PDF printed with "Microsoft Print to PDF" (and the like) keeps its digits
+ * but loses every Hebrew letter. Read the Hebrew back by OCR when OCR is
+ * available; otherwise say how to save the file properly.
+ */
+async function withMissingText(
+  doc: PdfDocument,
+  data: Uint8Array,
+  fileName: string,
+  scan: ScanSupport | undefined,
+): Promise<PdfDocument> {
+  if (!doc.missingText) return doc;
+  if (!scan) {
+    throw new ExtractionError(
+      `הטקסט העברי בקובץ "${fileName}" אינו קריא (הקובץ הודפס כנראה דרך "Microsoft Print to PDF"). ` +
+        `יש לשמור אותו מחדש דרך "שמירה כ-PDF" בחלון ההדפסה`,
+      "TEXT_LAYER_BROKEN",
+    );
+  }
+  const ocr = await scan.ocr();
+  scan.onProgress?.(0, doc.missingText.items.length);
+  return repairMissingText(doc, data, ocr, (done, total) => scan.onProgress?.(done, total));
+}
+
+export function ocrRepairWarning(fileName: string): string {
+  return (
+    `הטקסט העברי בקובץ "${fileName}" נקרא ב-OCR (הקובץ הודפס דרך "Microsoft Print to PDF"), ולכן שמות המוצרים עלולים להכיל שגיאות. ` +
+    `הסכומים והכמויות נקראו במדויק. בפעם הבאה עדיף לשמור דרך "שמירה כ-PDF"`
+  );
 }
 
 /** A scan with no text layer at all (the scanner ran no OCR of its own). */

@@ -1,16 +1,17 @@
 import type { CustomerConfig } from "../customer.js";
 import type { PdfDocument } from "../pdf/layout.js";
-import { dHaiParser, menashriParser } from "./agroline.js";
+import { agrolineGenericParser, dHaiParser, menashriParser } from "./agroline.js";
 import { agrolineDraftParser } from "./agrolineDraft.js";
 import { carmelParser } from "./carmel.js";
 import { galilParser } from "./galil.js";
+import { genericTableParser } from "./generic.js";
 import { granotParser } from "./granot.js";
 import { haklaimParser } from "./haklaim.js";
 import { harKorParser } from "./harKor.js";
 import { hasorParser } from "./hasor.js";
 import { leviParser } from "./levi.js";
 import { shivukHahofParser } from "./shivukHahof.js";
-import type { OwnDocumentParser, SupplierParser } from "./types.js";
+import type { OwnDocumentParser, SupplierParser, TextSupplierParser } from "./types.js";
 
 /**
  * Every supplier format the product supports. Add a parser here, then list
@@ -28,6 +29,12 @@ export const SUPPLIER_PARSERS: SupplierParser[] = [
   harKorParser,
   leviParser,
 ];
+
+/**
+ * Generic parsers, in the order they are tried after the supplier-specific
+ * ones: any AGROLINE supplier, then the column-dictionary table parser.
+ */
+export const FALLBACK_PARSERS: TextSupplierParser[] = [agrolineGenericParser, genericTableParser];
 
 /** Suppliers we recognise but cannot parse, with the reason shown to the user. */
 export const UNSUPPORTED_SUPPLIERS: { vatId: string; name: string; reason: string }[] = [];
@@ -50,6 +57,11 @@ export function supplierParsersFor(config: CustomerConfig): SupplierParser[] {
     if (!parser) throw new Error(`Unknown supplier parser "${id}" in customer config "${config.slug}"`);
     return parser;
   });
+}
+
+/** Every parser to try for a customer: its suppliers', then the generic ones if enabled. */
+export function parsersToTry(config: CustomerConfig): SupplierParser[] {
+  return [...supplierParsersFor(config), ...(config.genericFallback !== false ? FALLBACK_PARSERS : [])];
 }
 
 /**

@@ -23,8 +23,11 @@ export type OcrLine = Box & {
 /** "eng" reads digits, dates and amounts; "heb" reads product names and labels. */
 export type OcrModel = "eng" | "heb";
 
+/** `unit: "word"` returns one box per word instead of per line. */
+export type OcrOptions = { model: OcrModel; whitelist?: string; unit?: "line" | "word" };
+
 export interface OcrEngine {
-  readLines(image: GrayImage, options: { model: OcrModel; whitelist?: string }): Promise<OcrLine[]>;
+  readLines(image: GrayImage, options: OcrOptions): Promise<OcrLine[]>;
 }
 
 /**

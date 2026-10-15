@@ -44,6 +44,13 @@ export type SupplierInvoice = {
   printedItemsTotal: number | null;
   /** Read from a scanned image by OCR rather than from the PDF's text. */
   scanned?: true;
+  /** The supplier's VAT number, when printed. */
+  vatId?: string | null;
+  /**
+   * Read by a generic parser (any AGROLINE supplier, or the table parser)
+   * rather than one written for this supplier.
+   */
+  generic?: "agroline" | "table";
   warnings: string[];
 };
 
@@ -77,6 +84,8 @@ export type OwnInvoice = {
   againstInvoice: string | null;
   lines: OwnLine[];
   printedGrossTotal: number | null;
+  /** Who the document is addressed to ("לכבוד:"): the supplier, as the wholesaler names it. */
+  counterparty?: { name: string; vatId: string | null };
   commercialDiscount: number;
   /** commercialDiscount / gross, e.g. 0.12. */
   discountPct: number;

@@ -39,6 +39,10 @@
     "own": "sample_data/הדפסת טיוטת חש' מגדל_10028_4481.pdf",
     "supplier": "sample_data/לוייי.pdf"
   },
+  "dudu": {
+    "own": "sample_data/משק דודו אצל תאנה ורימון.pdf",
+    "supplier": "sample_data/משק דודו.pdf"
+  },
   "excel": {
     "format": "excel",
     "own": "sample_data/excel/תאנה רוימון.xlsx",

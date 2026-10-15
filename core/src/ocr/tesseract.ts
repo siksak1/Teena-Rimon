@@ -1,4 +1,4 @@
-import type { GrayImage, OcrLine, OcrModel } from "./types.js";
+import type { GrayImage, OcrLine, OcrModel, OcrOptions } from "./types.js";
 
 /** The Tesseract WASM binary and the trained models, as bytes (never fetched). */
 export type TesseractFiles = {
@@ -29,11 +29,11 @@ export async function createTesseract(files: TesseractFiles) {
   }
 
   return {
-    async readLines(image: GrayImage, options: { model: OcrModel; whitelist?: string }): Promise<OcrLine[]> {
+    async readLines(image: GrayImage, options: OcrOptions): Promise<OcrLine[]> {
       const engine = await engineFor(options.model);
       engine.setVariable("tessedit_char_whitelist", options.whitelist ?? "");
       engine.loadImage(toRgba(image));
-      return engine.getTextBoxes("line").map(({ rect, text, confidence }) => ({
+      return engine.getTextBoxes(options.unit ?? "line").map(({ rect, text, confidence }) => ({
         left: rect.left,
         top: rect.top,
         right: rect.right,

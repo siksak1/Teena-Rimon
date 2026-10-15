@@ -1,5 +1,5 @@
 import { openPdf } from "./pdfjs.js";
-import { collapseWhitespace, fixMirroring, parseNumber } from "./text.js";
+import { collapseWhitespace, fixMirroring, hasHebrew, parseNumber } from "./text.js";
 
 export type TextItem = {
   page: number;
@@ -9,6 +9,8 @@ export type TextItem = {
   y: number;
   width: number;
   str: string;
+  /** Font size in points (the text matrix's vertical scale). */
+  size: number;
 };
 
 /** Contiguous run of items inside one visual row (a table cell). */
@@ -34,7 +36,21 @@ export type PdfDocument = {
   rows: Row[];
   /** Plain text of the whole document, for supplier detection. */
   text: string;
+  /**
+   * Set when the PDF draws Hebrew in glyphs that have no Unicode mapping
+   * (e.g. "Microsoft Print to PDF"): the letters extract as blanks and only
+   * digits survive. `repairMissingText` reads them back by OCR.
+   */
+  missingText?: MissingText;
+  /** Some of the text was read by OCR (see `missingText`). */
+  repairedByOcr?: boolean;
 };
+
+/** Per page: the items that extracted, and where the unmapped runs start. */
+export type MissingText = { items: TextItem[][]; blanks: TextItem[][] };
+
+/** Fewer Hebrew letters than this, with at least as many blank runs, means the Hebrew is missing. */
+const MISSING_TEXT_MIN = 10;
 
 /** Items whose baselines differ by less than this are on the same row. */
 const ROW_TOLERANCE = 1.6;
@@ -45,25 +61,50 @@ const CELL_GAP = 4.5;
 export async function loadPdf(data: Uint8Array): Promise<PdfDocument> {
   const { pdf, close } = await openPdf(data);
   const pages: Row[][] = [];
+  const allItems: TextItem[][] = [];
+  const blanks: TextItem[][] = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
     const items: TextItem[] = [];
+    const pageBlanks: TextItem[] = [];
     for (const raw of content.items) {
-      if (!("str" in raw) || !raw.str.trim()) continue;
-      items.push({
+      if (!("str" in raw)) continue;
+      const item = {
         page: p,
         x: raw.transform[4],
         y: raw.transform[5],
         width: raw.width,
         str: fixMirroring(raw.str),
-      });
+        size: Math.hypot(raw.transform[2], raw.transform[3]),
+      };
+      // A blank with a width is a run of glyphs that map to no character.
+      if (raw.str.trim()) items.push(item);
+      else if (raw.str && raw.width > 0) pageBlanks.push(item);
     }
+    allItems.push(items);
+    blanks.push(pageBlanks);
     pages.push(toRows(items));
   }
   await close();
+  return documentFromPages(pages, allItems, blanks);
+}
+
+function documentFromPages(pages: Row[][], items: TextItem[][], blanks: TextItem[][]): PdfDocument {
   const rows = pages.flat();
-  return { pages, rows, text: rows.map((r) => r.text).join("\n") };
+  const text = rows.map((r) => r.text).join("\n");
+  const doc: PdfDocument = { pages, rows, text };
+  const hebrew = [...text].filter(hasHebrew).length;
+  const blankCount = blanks.reduce((n, b) => n + b.length, 0);
+  if (hebrew < MISSING_TEXT_MIN && blankCount >= MISSING_TEXT_MIN) doc.missingText = { items, blanks };
+  return doc;
+}
+
+/** Rebuild a document from its items once the missing text has been added back. */
+export function documentFromItems(items: TextItem[][]): PdfDocument {
+  const pages = items.map((pageItems) => toRows(pageItems));
+  const rows = pages.flat();
+  return { pages, rows, text: rows.map((r) => r.text).join("\n"), repairedByOcr: true };
 }
 
 /** Group items into visual rows (top to bottom) and each row into cells. */
@@ -115,7 +156,8 @@ function finishCell(c: { parts: string[]; xMin: number; xMax: number }): Cell {
   };
 }
 
-export type ColumnSpec<K extends string> = { key: K; header: RegExp };
+/** `label` is the header as printed, for fuzzy matching of OCR-read headers. */
+export type ColumnSpec<K extends string> = { key: K; header: RegExp; label?: string };
 export type Columns<K extends string> = Record<K, number>;
 
 /**
@@ -125,10 +167,13 @@ export type Columns<K extends string> = Record<K, number>;
 export function columnsFromHeader<K extends string>(
   row: Row,
   specs: ColumnSpec<K>[],
+  options: { fuzzy?: boolean } = {},
 ): Columns<K> | null {
   const columns = {} as Columns<K>;
   for (const spec of specs) {
-    const cell = row.cells.find((c) => spec.header.test(c.text));
+    const cell =
+      row.cells.find((c) => spec.header.test(c.text)) ??
+      (options.fuzzy && spec.label ? row.cells.find((c) => fuzzyEquals(c.text, spec.label!)) : undefined);
     if (!cell) return null;
     columns[spec.key] = cell.x;
   }
@@ -225,4 +270,52 @@ export function amountOnRow(doc: PdfDocument, label: string): number | null {
   const amounts = row?.cells.filter((c) => /\d\.\d{2}\b/.test(c.text) && !c.text.includes("%")) ?? [];
   if (amounts.length === 0) return null;
   return parseNumber(amounts.reduce((a, b) => (a.x < b.x ? a : b)).text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Fuzzy matching, for text read back by OCR                           */
+/* ------------------------------------------------------------------ */
+
+/** Letters and digits only: OCR often drops or adds quotes, slashes and spaces. */
+function letters(value: string): string {
+  return value.replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function editDistance(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const up = prev[j];
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = up;
+    }
+  }
+  return prev[b.length];
+}
+
+/** Equal up to punctuation and about one misread letter in six. */
+export function fuzzyEquals(text: string, label: string): boolean {
+  const a = letters(text);
+  const b = letters(label);
+  if (!a || !b) return false;
+  return editDistance(a, b) <= Math.max(1, Math.floor(b.length / 6));
+}
+
+/** Like `text.includes(label)`, tolerant of OCR misreads: some run of cells matches `label`. */
+export function fuzzyIncludes(row: Row, label: string): boolean {
+  if (row.text.includes(label)) return true;
+  const { cells } = row;
+  for (let i = 0; i < cells.length; i++) {
+    let joined = "";
+    for (let j = i; j < cells.length && j < i + 3; j++) {
+      joined = joined ? `${joined} ${cells[j].text}` : cells[j].text;
+      if (fuzzyEquals(joined, label)) return true;
+    }
+    // A label can also be the start of a longer cell ("עבור תקופה 28/09/2026…").
+    const words = cells[i].text.split(" ");
+    for (let n = 1; n < words.length; n++) if (fuzzyEquals(words.slice(0, n).join(" "), label)) return true;
+  }
+  return false;
 }
