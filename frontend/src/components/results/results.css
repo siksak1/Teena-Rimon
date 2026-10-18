@@ -34,6 +34,20 @@
   font-size: 0.92rem;
 }
 
+.results__columns {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.results__columns summary {
+  cursor: pointer;
+}
+
+.results__columns p {
+  margin: 4px 0 0;
+}
+
 .eyebrow {
   display: flex;
   align-items: center;

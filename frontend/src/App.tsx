@@ -171,7 +171,7 @@ export default function App() {
           <FileDropZone
             key={`own-${mode}`}
             label={mode === "excel" ? `דוח ${customer.displayName}` : `חשבונית ${customer.displayName}`}
-            hint={mode === "excel" ? "דוח קליטה: מגדל, תאריך, אסמכתא, תוצרת, משקל נטו, מחיר" : customer.ownDocument.label}
+            hint={mode === "excel" ? "דוח קליטה עם מגדל, תאריך, אסמכתא, פריט, משקל ומחיר — בכל סדר ובכל שמות עמודות" : customer.ownDocument.label}
             file={ownFile}
             onFile={pick(setOwnFile)}
             accent="ours"
@@ -180,7 +180,7 @@ export default function App() {
           <FileDropZone
             key={`supplier-${mode}`}
             label={mode === "excel" ? "דוח ספק" : "חשבונית ספק"}
-            hint={mode === "excel" ? "דוח מכירות לפי מגדל: תעודת משלוח, מגדל, תאור, משקל ומחיר מכירה" : "חשבונית מס מרכזת של הספק"}
+            hint={mode === "excel" ? "דוח מכירות עם תעודת משלוח, מגדל, פריט, משקל ומחיר — בכל סדר ובכל שמות עמודות" : "חשבונית מס מרכזת של הספק"}
             file={supplierFile}
             onFile={pick(setSupplierFile)}
             accent="supplier"

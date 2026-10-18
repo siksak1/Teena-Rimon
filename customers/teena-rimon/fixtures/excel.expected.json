@@ -1,6 +1,6 @@
 {
   "supplier": {
-    "parser": "grower-sales-report",
+    "parser": "excel-report",
     "invoiceNumber": "",
     "lines": 50,
     "printedItemsTotal": null,

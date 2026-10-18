@@ -1,6 +1,6 @@
 {
   "slug": "teena-rimon",
-  "configVersion": 4,
+  "configVersion": 5,
   "displayName": "תאנה ורימון",
   "shortName": "ת\"ר",
   "ownDocument": { "format": "agroline-draft", "label": "חשבונית טיוטה (AGROLINE)" },
@@ -19,8 +19,6 @@
   "unprintedDiscounts": { "carmel": 0.12 },
   "offsetting": "invoice-wide",
   "excel": {
-    "supplierFormat": "grower-sales-report",
-    "ownFormat": "teena-rimon-weighings",
     "tolerances": { "sumToleranceRel": 0.02 }
   },
   "analytics": { "sendDiscrepancyAmount": true }

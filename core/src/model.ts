@@ -103,6 +103,8 @@ export type ExtractionResult = {
      * with no discount and no printed totals (see `extractExcel`). Absent for PDFs.
      */
     format?: "excel";
+    /** Excel only: the column each field was read from, per report (field → header or column letter). */
+    excelColumns?: { own: Record<string, string>; supplier: Record<string, string> };
   };
 };
 

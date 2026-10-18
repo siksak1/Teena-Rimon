@@ -103,10 +103,26 @@ The supplier is detected from the PDF (VAT number / company name), among the par
 
 ### Excel reports (PDF / Excel switch)
 
-Customers with an `excel` block in their config get a switch between two PDF invoices and two Excel reports (`core/src/excel/`, read with `read-excel-file`, loaded only in Excel mode). Each report covers many growers over a period. Columns are found by header text; a missing column is reported by name.
+Customers with an `excel` block in their config get a switch between two PDF invoices and two Excel reports (`core/src/excel/`, read with `read-excel-file`, loaded only in Excel mode). Each report covers many growers over a period.
 
-- **Supplier: grower sales report** (`grower-sales-report`) — מס' תעודה משלוח, שם מגדל, תאור, שם זן, גודל, תאור איכות, כמות, משקל מכירה, מחיר מכירה, תאריך. Variety, size and grade are joined into the item name. Rows where weight equals the package count (pineapples) are marked as sold by the piece.
-- **Own: Teena-Rimon weighings** (`teena-rimon-weighings`) — מגדל, תאריך, אסמכתא, תוצרת, משקל נטו, מחיר. One row per weighing; no package counts.
+**Columns are found by their values, not their names** (`core/src/excel/columns.ts`), so any column names and order work, and so does a sheet with no header row:
+
+- **Header row:** the row of labels just above the first rows of figures. Summary rows (סה"כ…) are skipped. In a workbook with several sheets, the sheet with the most rows of figures is read.
+- **Text columns:**
+  - **Date:** date cells.
+  - **Item:** the text column the product dictionary recognises.
+  - **Grower:** other text in long runs. A column holding a single value (the report's destination) is ignored.
+- **Figures:** every way of giving the number columns the roles weight, price and package count is scored, and the best is kept:
+  - weight ≥ packages on almost every row, with a steady weight per package
+  - price is the smaller value, and weight × price is a plausible amount
+  - columns shaped like document numbers are kept out of these roles
+- **Delivery note:** whole numbers repeated over one grower's rows. When a report has two such columns, the one whose values also appear in the other report links the two. On the own side, the other one becomes its own document number.
+- **Variety, size and grade:** leftover columns, joined into the supplier's item name. A receiving report with such columns and a sales report without them means the files were swapped.
+- **Header names** (`HEADER_HINTS`) add only a small bonus that breaks near-ties.
+- **Warnings and errors:** a column that wins by a small margin, or an expected column (grower, date, document) that isn't found, adds a "לא בוודאות" warning, and the comparison still runs. Without an item, weight or price column the file is refused (`MISSING_COLUMN`), naming the missing fields.
+- **Results page:** a collapsible line shows which column each field was read from.
+
+Rows where weight equals the package count (pineapples) are marked as sold by the piece. Samples so far: the supplier's sales report (both versions) and Teena-Rimon's weighings report, with and without its own receipt number and package count.
 
 Neither report has a discount or printed totals: money is weight × price on both sides. The same engine runs, with these differences:
 

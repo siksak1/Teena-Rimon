@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { type ExcelField, FIELD_LABELS } from "@core/excel/fields.js";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
 import customer from "@customer-config";
 import { money, OCR_MARK, percent, shortDate, signedMoney } from "./format";
@@ -69,6 +70,15 @@ function Results({ extraction, result }: Props) {
             <p className="results__meta">
               {new Set(supplier.lines.map((l) => l.grower)).size} מגדלים · {periodOf(supplier.lines)}
             </p>
+            {extraction.meta.excelColumns && (
+              <details className="results__columns">
+                <summary>העמודות שזוהו</summary>
+                <p>דוח הספק: {columnsLine(extraction.meta.excelColumns.supplier)}</p>
+                <p>
+                  דוח {ownName}: {columnsLine(extraction.meta.excelColumns.own)}
+                </p>
+              </details>
+            )}
           </>
         ) : (
           <>
@@ -208,4 +218,12 @@ function periodOf(lines: { date: string | null }[]): string {
   const first = shortDate(dates[0]);
   const last = shortDate(dates[dates.length - 1]);
   return first === last ? first : `${first} – ${last}`;
+}
+
+/** "פריט ← תאור · משקל ← משקל מכירה …": which column each field was read from. */
+function columnsLine(used: Record<string, string>): string {
+  return (Object.keys(FIELD_LABELS) as ExcelField[])
+    .filter((f) => used[f])
+    .map((f) => `${FIELD_LABELS[f]} ← ${used[f]}`)
+    .join(" · ");
 }

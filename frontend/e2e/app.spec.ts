@@ -57,7 +57,7 @@ test("is not indexable and runs under the production security headers", async ({
   expect(headers["content-security-policy"]).toContain("connect-src https://eu.i.posthog.com;");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow, noarchive");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("השוואת חשבונית ספק מול תאנה ורימון");
-  await expect(page.locator(".site-foot")).toContainText("תצורה 4");
+  await expect(page.locator(".site-foot")).toContainText("תצורה 5");
 });
 
 test("reconciles real invoices in the browser; only a counts-only event leaves the page", async ({ page, baseURL }) => {
@@ -187,6 +187,22 @@ test("the browser blocks sending data anywhere else, even to our own server", as
     "connect-src https://example.com/upload",
     expect.stringMatching(/^connect-src http:\/\/127\.0\.0\.1:\d+\/e2e-test-token-0123456789\/upload$/),
   ]);
+});
+
+test("reads Excel reports with other column names, and says which columns it used", async ({ page }) => {
+  const watch = await open(page);
+  await page.getByRole("radio", { name: "דוחות אקסל" }).click();
+  const inputs = page.locator('input[type="file"]');
+  await inputs.nth(0).setInputFiles(sample("excel/מארק מחירי תאנה ורימון.xlsx"));
+  await inputs.nth(1).setInputFiles(sample("excel/דוחות עם מחירים-תאנה ורימון עד ה-7.10.26.xlsx"));
+  await page.getByRole("button", { name: "השוואת הדוחות" }).click();
+
+  await expect(page.locator(".total-card--hot strong")).toContainText("20,018.77");
+  await expect(page.locator(".count-strip")).toContainText("רק אצל הספק: 28");
+  await page.getByText("העמודות שזוהו").click();
+  await expect(page.locator(".results__columns")).toContainText("תעודת משלוח ← תעודה");
+  await expect(page.locator(".results__columns")).toContainText("תעודת משלוח ← אסמכתא");
+  expect(watch.consoleErrors).toEqual([]);
 });
 
 test("collapses ₪0 groups, filters by column and exports to Excel without leaving the page", async ({ page, baseURL }) => {

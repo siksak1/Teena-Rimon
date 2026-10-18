@@ -1,16 +1,24 @@
-import { readSheet } from "read-excel-file/universal";
+import readXlsxFile from "read-excel-file/universal";
 
 export type Cell = string | number | boolean | Date | null;
 
-/** The rows of the first sheet, or null when the bytes are not an .xlsx workbook. */
-export async function readFirstSheet(bytes: Uint8Array): Promise<Cell[][] | null> {
+/**
+ * The rows of the workbook's data sheet (the one with the most rows of
+ * figures, as a workbook may open on a cover sheet), or null when the bytes
+ * are not an .xlsx workbook.
+ */
+export async function readDataSheet(bytes: Uint8Array): Promise<Cell[][] | null> {
   // read-excel-file wants an ArrayBuffer of exactly the file.
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  let sheets: Cell[][][];
   try {
-    return (await readSheet(buffer)) as Cell[][];
+    sheets = (await readXlsxFile(buffer)).map((s) => s.data as Cell[][]);
   } catch {
     return null;
   }
+  const figures = (rows: Cell[][]) =>
+    rows.filter((row) => row.filter((c) => typeof c === "number" || c instanceof Date).length >= 2).length;
+  return sheets.reduce<Cell[][] | null>((best, rows) => (!best || figures(rows) > figures(best) ? rows : best), null);
 }
 
 /** Header text compared loosely: Hebrew/ASCII quote marks unified, spaces collapsed. */
@@ -20,15 +28,6 @@ export function normalizeHeader(value: Cell): string {
     .replace(/[״“”]/g, '"')
     .replace(/\s+/g, " ")
     .trim();
-}
-
-/** Index of the first row (among the first ten) that has every one of `headers`. */
-export function findHeaderRow(rows: Cell[][], headers: string[]): number {
-  const wanted = headers.map(normalizeHeader);
-  return rows.slice(0, 10).findIndex((row) => {
-    const cells = new Set(row.map(normalizeHeader));
-    return wanted.every((h) => cells.has(h));
-  });
 }
 
 export function text(value: Cell): string {

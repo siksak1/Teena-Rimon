@@ -93,14 +93,11 @@ export const customerConfigSchema = z.strictObject({
   dictionary: dictionaryExtension.optional(),
   /**
    * Excel comparison mode (the PDF / Excel switch in the app). Absent: PDF only.
-   * Both reports cover many growers over a period; see `core/src/excel/`.
+   * Both reports cover many growers over a period; their columns are found by
+   * their values, whatever they are called (see `core/src/excel/columns.ts`).
    */
   excel: z
     .strictObject({
-      /** Format id of the supplier's sales report (`EXCEL_FORMATS`). */
-      supplierFormat: z.string().min(1),
-      /** Format id of the wholesaler's own receiving report. */
-      ownFormat: z.string().min(1),
       /** Overrides `tolerances` in Excel mode. */
       tolerances: tolerances.partial().optional(),
       /**
