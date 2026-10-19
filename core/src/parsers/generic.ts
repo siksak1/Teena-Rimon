@@ -2,7 +2,7 @@ import { ExtractionError } from "../errors.js";
 import type { SupplierInvoice, SupplierLine } from "../model.js";
 import { wrappedText, type Cell, type PdfDocument, type Row } from "../pdf/layout.js";
 import { hasHebrew, parseDate, parseNumber, round2 } from "../pdf/text.js";
-import { headerField, PALLET_ROW, SUMMARY_ROW, TOTAL_LABEL, type HeaderField } from "./genericHeaders.js";
+import { ADJUSTMENT_ROW, headerField, PALLET_ROW, SUMMARY_ROW, TOTAL_LABEL, type HeaderField } from "./genericHeaders.js";
 import type { TextSupplierParser } from "./types.js";
 
 /**
@@ -45,6 +45,8 @@ const REL_TOLERANCE = 0.0001;
 const COLUMN_TOLERANCE = 15;
 /** A discount above this is not a discount but two unrelated amounts. */
 const MAX_DISCOUNT = 0.5;
+/** A column holds quantities when at least this share of the rows (and two) use it. */
+const QUANTITY_COLUMN_SHARE = 0.1;
 /** Header rows sit at most this far (points) above the first item row. */
 const HEADER_REACH = 80;
 /** Printed totals may differ from the line sum by per-line rounding. */
@@ -61,14 +63,18 @@ function parseGeneric(doc: PdfDocument): SupplierInvoice {
   if (lines.length === 0) throw refuse("לא נמצאו שורות פריטים");
 
   const sum = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
-  const printedItemsTotal = matchPrintedTotal(doc, isItem, [
+  const match = matchPrintedTotal(doc, isItem, [
     { value: sum, items: sum },
     { value: round2(sum + pallets), items: sum },
     // Gross lines and a footer discount: the net total is printed with per-line rounding drift.
     ...(footerDiscount ? [{ value: round2(gross), items: printedNear(doc, isItem, sum) ?? sum }] : []),
   ]);
-  if (printedItemsTotal == null) {
-    throw refuse(`סכום השורות (${sum}) אינו מתאים לאף סה"כ המודפס בחשבונית`);
+  if (match == null) {
+    throw refuse(`סכום השורות (${sum}) אינו מתאים לאף סה"כ המודפס בחשבונית${totalsHint(doc, isItem, sum, pallets)}`);
+  }
+  const printedItemsTotal = match.items;
+  if (match.adjustment != null) {
+    warnings.push(`הפרש של ${match.gap} ש"ח בין סכום השורות לסה"כ המודפס, המוסבר בעיגול/הנחה כללית של ${match.adjustment} ש"ח בחשבונית`);
   }
 
   warnings.push(
@@ -184,16 +190,31 @@ function refuse(reason: string): ExtractionError {
 /* Item rows, by arithmetic                                            */
 /* ------------------------------------------------------------------ */
 
-/** "94.00 ק'ג", "29.00 ש"ח", "1,440.00", ":39274.95" — not dates, codes or percentages. */
-const AMOUNT = /^[:\-]?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:ק["'״]?ג|ש["'״]?ח|יח'?|kg)?\s*:?$|^-?\d+(?:\.\d+)?$/;
+/** A number with an optional unit beside it: "94.00 ק'ג", "1,440.00", ":39274.95". */
+const NUMBER_WITH_UNIT = /^(\D*?)([:\-]?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*:?)(\D*)$/;
+/** Units, without their quote marks. */
+const UNITS = new Set(["", "קג", "שח", "יח", "יחידות", "kg"]);
+const QUOTES = /["'״׳]/g;
+
+/**
+ * The value of a cell that is an amount, or null: not a date, a code or a
+ * percentage. The unit may print on either side of the number, and its quote
+ * mark can be moved away from it in right-to-left text ("'2.00 יח",
+ * "ש"ח 3.000").
+ */
+export function readAmount(text: string): number | null {
+  const match = text.trim().match(NUMBER_WITH_UNIT);
+  if (!match) return null;
+  const [, before, number, after] = match;
+  if (!UNITS.has((before + after).replace(QUOTES, "").replace(/\s+/g, ""))) return null;
+  // Long whole numbers are document, pallet or item codes.
+  if (/^\d{6,}$/.test(number.trim())) return null;
+  return parseNumber(number);
+}
 
 function amounts(row: Row): Amount[] {
   return row.cells.flatMap((cell) => {
-    const text = cell.text.trim();
-    if (!AMOUNT.test(text)) return [];
-    // Long whole numbers are document, pallet or item codes.
-    if (/^\d{6,}$/.test(text)) return [];
-    const value = parseNumber(text);
+    const value = readAmount(cell.text);
     return value == null ? [] : [{ cell, value }];
   });
 }
@@ -219,10 +240,11 @@ function rowReadings(row: Row, docDiscounts: number[]): Arithmetic[] {
   const readings: Arithmetic[] = [];
   for (let t = 0; t < nums.length; t++) {
     const total = nums[t];
-    if (total.value <= 0) continue;
+    if (total.value < 0) continue;
     for (let p = t + 1; p < nums.length; p++) {
       const price = nums[p];
-      if (price.value <= 0) continue;
+      // A free line (price and total 0) is kept: a delivery charged nothing is still a delivery.
+      if (price.value < 0 || (price.value === 0) !== (total.value === 0)) continue;
       // A second, discounted price column between the price and the total.
       const implied = nums
         .slice(t + 1, p)
@@ -248,28 +270,44 @@ function rowReadings(row: Row, docDiscounts: number[]): Arithmetic[] {
  * discount, not the discounted price. Within the table's columns when known
  * (6 × 50 = 300 reads either way).
  */
-function bestReading(readings: Arithmetic[], columns?: { totalX: number; priceX: number }): Arithmetic | null {
+function bestReading(readings: Arithmetic[], columns?: TableColumns): Arithmetic | null {
+  const near = (x: number, column: number) => Math.abs(x - column) <= COLUMN_TOLERANCE;
   const fits = columns
     ? readings.filter(
-        (r) => Math.abs(r.total.cell.x - columns.totalX) <= COLUMN_TOLERANCE && Math.abs(r.price.cell.x - columns.priceX) <= COLUMN_TOLERANCE,
+        (r) =>
+          near(r.total.cell.x, columns.totalX) &&
+          near(r.price.cell.x, columns.priceX) &&
+          columns.quantityXs.some((x) => near(r.quantity.cell.x, x)),
       )
     : readings;
   return fits.reduce<Arithmetic | null>((best, r) => (!best || r.price.value > best.price.value ? r : best), null);
 }
 
+type TableColumns = { totalX: number; priceX: number; quantityXs: number[] };
+
 /**
  * Item rows: rows that multiply out, with their price and total in the
  * columns most such rows use (other tables on the invoice are laid out
- * differently).
+ * differently), and their quantity in a column several rows use, so a row
+ * number or code that happens to multiply out is not taken for a quantity.
+ * Free lines (0 × price) only count inside those columns.
  */
 function findItemRows(doc: PdfDocument, docDiscounts: number[]): { rows: ItemRow[] } {
   const candidates = doc.rows
     .filter((row) => !SUMMARY_ROW.test(row.text))
     .map((row) => ({ row, readings: rowReadings(row, docDiscounts) }))
     .filter((c) => c.readings.length > 0);
-  if (candidates.length === 0) return { rows: [] };
-  const first = candidates.map((c) => bestReading(c.readings)!);
-  const columns = { totalX: modalX(first.map((r) => r.total.cell.x)), priceX: modalX(first.map((r) => r.price.cell.x)) };
+  const first = candidates.flatMap((c) => bestReading(c.readings.filter((r) => r.total.value > 0)) ?? []);
+  if (first.length === 0) return { rows: [] };
+  const columns: TableColumns = {
+    totalX: modalX(first.map((r) => r.total.cell.x)),
+    priceX: modalX(first.map((r) => r.price.cell.x)),
+    // Several columns: unit-priced rows have their quantity under the package count.
+    quantityXs: frequentXs(
+      first.map((r) => r.quantity.cell.x),
+      Math.max(2, Math.ceil(first.length * QUANTITY_COLUMN_SHARE)),
+    ),
+  };
   return {
     rows: candidates.flatMap(({ row, readings }) => {
       const math = bestReading(readings, columns);
@@ -290,6 +328,16 @@ function modalX(xs: number[]): number {
     }
   }
   return best;
+}
+
+/** The x's (one per column) shared by at least `minCount` values. */
+function frequentXs(xs: number[], minCount: number): number[] {
+  const columns: number[] = [];
+  for (const x of xs) {
+    if (columns.some((c) => Math.abs(c - x) <= COLUMN_TOLERANCE)) continue;
+    if (xs.filter((y) => Math.abs(y - x) <= COLUMN_TOLERANCE).length >= minCount) columns.push(x);
+  }
+  return columns;
 }
 
 /* ------------------------------------------------------------------ */
@@ -427,8 +475,8 @@ function rowFields(row: Row, math: Arithmetic, columns: HeaderColumn[], invoiceD
         continue;
       case "packages":
       case "quantity":
-        if (out.packages == null && AMOUNT.test(text)) {
-          out.packages = parseNumber(text);
+        if (out.packages == null && readAmount(text) != null) {
+          out.packages = readAmount(text);
           continue;
         }
         break;
@@ -449,7 +497,7 @@ function rowFields(row: Row, math: Arithmetic, columns: HeaderColumn[], invoiceD
       continue;
     }
     if (column?.field === "description" || hasHebrew(text)) {
-      if (/^(?:ק["'״]?ג|ש["'״]?ח|יח'?)$/.test(text)) continue;
+      if (text && UNITS.has(text.replace(QUOTES, ""))) continue;
       out.text.push(cell);
       if (column?.field === "description") out.descriptionX ??= column.x;
     }
@@ -486,7 +534,9 @@ function describe(rows: Row[], row: Row, fields: RowFields, columns: HeaderColum
 }
 
 function unitOf(quantityText: string): string {
-  return quantityText.replace(/[\d.,:\s-]/g, "");
+  const unit = quantityText.replace(/[\d.,:\s-]/g, "");
+  // "'2.00 יח": a quote moved before the number belongs after the unit.
+  return unit.replace(/^(["'״׳])(.+)$/, "$2$1");
 }
 
 /* ------------------------------------------------------------------ */
@@ -581,17 +631,56 @@ function printedNear(doc: PdfDocument, items: Map<Row, ItemRow>, value: number):
   return printedAmounts(doc, items).find((p) => Math.abs(p - value) <= 1) ?? null;
 }
 
-/** The printed items total the lines add up to (less pallets when it includes them), or null. */
+type TotalMatch = { items: number; adjustment: number | null; gap: number };
+
+/**
+ * The printed items total the lines add up to (less pallets when it includes
+ * them), or null. Failing an exact match, a gap no larger than a rounding or
+ * general-discount amount printed on the invoice is accepted: suppliers
+ * spread such an amount over the totals they print.
+ */
 function matchPrintedTotal(
   doc: PdfDocument,
   items: Map<Row, ItemRow>,
   candidates: { value: number; items: number }[],
-): number | null {
+): TotalMatch | null {
   const printed = printedAmounts(doc, items);
   for (const candidate of candidates) {
-    if (printed.some((p) => Math.abs(Math.abs(p) - candidate.value) <= TOTAL_TOLERANCE)) return candidate.items;
+    if (printed.some((p) => Math.abs(Math.abs(p) - candidate.value) <= TOTAL_TOLERANCE)) {
+      return { items: candidate.items, adjustment: null, gap: 0 };
+    }
+  }
+  for (const adjustment of printedAdjustments(doc)) {
+    for (const candidate of candidates) {
+      const p = printed.find((p) => Math.abs(Math.abs(p) - candidate.value) <= Math.abs(adjustment) + TOTAL_TOLERANCE);
+      if (p != null) return { items: candidate.items, adjustment, gap: round2(Math.abs(Math.abs(p) - candidate.value)) };
+    }
   }
   return null;
+}
+
+/** A rounding or general-discount amount is at most this (₪); larger ones are real discounts. */
+const MAX_ADJUSTMENT = 1;
+/** An amount can print a few points off its label's row. */
+const ADJUSTMENT_REACH = 4;
+
+/** Small amounts printed beside "הנחה כללית", "עיגול" or "הפרש". */
+function printedAdjustments(doc: PdfDocument): number[] {
+  const labels = doc.rows.filter((r) => ADJUSTMENT_ROW.test(r.text));
+  return labels
+    .flatMap((label) => doc.rows.filter((r) => r.page === label.page && Math.abs(r.y - label.y) <= ADJUSTMENT_REACH))
+    .flatMap((r) => r.cells)
+    .filter((c) => /\d\.\d{2}$/.test(c.text.trim()))
+    .map((c) => readAmount(c.text))
+    .filter((v): v is number => v != null && v !== 0 && Math.abs(v) <= MAX_ADJUSTMENT);
+}
+
+/** For a refusal: the printed total nearest the lines, and the pallets left out. */
+function totalsHint(doc: PdfDocument, items: Map<Row, ItemRow>, sum: number, pallets: number): string {
+  const printed = printedAmounts(doc, items);
+  if (printed.length === 0) return " (לא נמצא סה\"כ מודפס)";
+  const nearest = printed.reduce((best, p) => (Math.abs(Math.abs(p) - sum) < Math.abs(Math.abs(best) - sum) ? p : best));
+  return ` (הקרוב ביותר: ${nearest}, הפרש ${round2(Math.abs(nearest) - sum)}; משטחים/פיקדונות שזוהו: ${round2(pallets)})`;
 }
 
 function round4(value: number): number {

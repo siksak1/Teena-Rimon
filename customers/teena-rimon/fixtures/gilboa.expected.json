@@ -1,0 +1,433 @@
+{
+  "supplier": {
+    "parser": "generic-570046193",
+    "invoiceNumber": "SI266000380",
+    "lines": 29,
+    "printedItemsTotal": 52878.9,
+    "warnings": [
+      "החשבונית נקראה בפורמט כללי (ללא קורא ייעודי לספק זה). הסכומים אומתו מול הסה\"כ המודפס, אך מומלץ לבדוק את התאריכים, מספרי התעודות ושמות המוצרים"
+    ]
+  },
+  "own": {
+    "documentNumber": "10033",
+    "againstInvoice": "266000380",
+    "lines": 29,
+    "commercialDiscount": 6346.77,
+    "discountPct": 0.12,
+    "warnings": []
+  },
+  "totals": {
+    "supplierNet": 52878.9,
+    "ownGross": 52889.7,
+    "ownDiscountPct": 0.12,
+    "ownNet": 46542.93,
+    "diff": -6335.97
+  },
+  "groups": [
+    {
+      "rows": "S16→T17",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -298.08,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S23→T24",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -279.3,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S18→T18",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -271.73,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S29→T27",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -265.32,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S19→T19",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -263.34,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S20→T21",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -263.34,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S22→T23",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -262.94,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S6→T7",
+      "flags": [
+        "discount",
+        "doc_ref"
+      ],
+      "netDiff": -259.2,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%",
+        "אסמכתא שונה: ספק 263143, תאנה ורימון 5431"
+      ]
+    },
+    {
+      "rows": "S7→T8",
+      "flags": [
+        "discount",
+        "doc_ref"
+      ],
+      "netDiff": -259.2,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%",
+        "אסמכתא שונה: ספק 263143, תאנה ורימון 5431"
+      ]
+    },
+    {
+      "rows": "S17→T16",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -259.2,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S15→T15",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -258.98,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S11→T9",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -257.8,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S26→T25",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -253.82,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S9→T10",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -246.24,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S12→T12",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -239.04,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S8→T6",
+      "flags": [
+        "discount",
+        "doc_ref"
+      ],
+      "netDiff": -238.68,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%",
+        "אסמכתא שונה: ספק 263143, תאנה ורימון 5431"
+      ]
+    },
+    {
+      "rows": "S1→T1",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -237.6,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S2→T2",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -237.24,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S4→T3",
+      "flags": [
+        "discount",
+        "doc_ref"
+      ],
+      "netDiff": -235.08,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%",
+        "אסמכתא שונה: ספק 263130, תאנה ורימון 4479"
+      ]
+    },
+    {
+      "rows": "S3→T4",
+      "flags": [
+        "discount",
+        "doc_ref"
+      ],
+      "netDiff": -234.36,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%",
+        "אסמכתא שונה: ספק 263130, תאנה ורימון 4479"
+      ]
+    },
+    {
+      "rows": "S21→T20",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -229.68,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S13→T13",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -220.75,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S14→T14",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -220.42,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S5→T5",
+      "flags": [
+        "discount",
+        "doc_ref"
+      ],
+      "netDiff": -209.99,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%",
+        "אסמכתא שונה: ספק 263131, תאנה ורימון 4479"
+      ]
+    },
+    {
+      "rows": "S24→T22",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -160.08,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S10→T11",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -103.68,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S25→T26",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -79.08,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 1,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S28→T29",
+      "flags": [
+        "price",
+        "discount"
+      ],
+      "netDiff": 9.5,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "מחיר: ספק 0, תאנה ורימון 0.01",
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    },
+    {
+      "rows": "S27→T28",
+      "flags": [
+        "discount"
+      ],
+      "netDiff": -1.3,
+      "quantityDiff": 0,
+      "packagesDiff": null,
+      "dateDelta": 0,
+      "notes": [
+        "הנחה: בשורת הספק 0%, אצל תאנה ורימון 12%"
+      ]
+    }
+  ],
+  "supplierOnly": [],
+  "ownOnly": [],
+  "offset": {
+    "applies": false,
+    "groups": []
+  },
+  "dictionarySuggestions": [
+    "ארוז",
+    "בשק",
+    "בשקית",
+    "קג",
+    "קילו",
+    "קרטון"
+  ]
+}

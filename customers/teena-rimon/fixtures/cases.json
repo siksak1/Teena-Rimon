@@ -43,6 +43,10 @@
     "own": "sample_data/משק דודו אצל תאנה ורימון.pdf",
     "supplier": "sample_data/משק דודו.pdf"
   },
+  "gilboa": {
+    "own": "sample_data/1 תאנה ורימון.pdf",
+    "supplier": "sample_data/ספק 1.pdf"
+  },
   "excel": {
     "format": "excel",
     "own": "sample_data/excel/תאנה רוימון.xlsx",

@@ -54,5 +54,11 @@ export const SUMMARY_ROW = new RegExp(`סה${Q}כ|יתרה|להעברה|מחיר
 /** Pallet and deposit rows: charged on the invoice but outside the comparison. */
 export const PALLET_ROW = /משטח|פקדון|פלט|מכל ריק/;
 
-/** Labels of rows whose amount may be the printed items total. */
-export const TOTAL_LABEL = new RegExp(`סה${Q}כ|מחיר כולל|פדיון|לתשלום|ברוטו|נטו|תוצרת`);
+/**
+ * Labels of rows whose amount may be the printed items total. Produce is
+ * exempt from VAT and pallets are not, so the exempt amount is the items total.
+ */
+export const TOTAL_LABEL = new RegExp(`סה${Q}כ|מחיר כולל|פדיון|לתשלום|ברוטו|נטו|תוצרת|פטור ממע`);
+
+/** Rows whose small amount explains a gap between the lines and a printed total. */
+export const ADJUSTMENT_ROW = /הנחה כללית|עיגול|הפרש/;
