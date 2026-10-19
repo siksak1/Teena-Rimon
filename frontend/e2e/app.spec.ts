@@ -70,7 +70,7 @@ test("reconciles real invoices in the browser; only a counts-only event leaves t
   await expect.poll(() => watch.analytics.length).toBe(1);
   const [event] = watch.analytics;
   expect(event.event).toBe("reconciliation_completed");
-  expect(event.properties).toMatchObject({ customer: "teena-rimon", supplier_lines: 29, own_lines: 25, discrepancy_amount_nis: 2860 });
+  expect(event.properties).toMatchObject({ customer: "teena-rimon", internal: false, supplier_lines: 29, own_lines: 25, discrepancy_amount_nis: 2860 });
   const body = JSON.stringify(event);
   for (const fromInvoice of ["גרנות", "SI26602203", "פיטאיה", ".pdf"]) expect(body).not.toContain(fromInvoice);
 

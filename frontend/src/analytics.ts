@@ -6,10 +6,32 @@ const POSTHOG_KEY = "phc_npLKADDfrAERnccGFYqsRA9VxAXwzkMSbyyE5KYCM5Ny";
 /** The only host the app ever contacts; the CSP's connect-src allows exactly this origin. */
 const POSTHOG_CAPTURE_URL = "https://eu.i.posthog.com/i/v0/e/";
 
+const INTERNAL_KEY = "ledgermatch.internal";
+
+/**
+ * Opening the app with `#internal` marks this browser as ours, so our own
+ * tests on prod can be filtered out in PostHog; `#external` clears the mark.
+ * The hash never leaves the page, and is removed from the address bar.
+ */
+function internalBrowser(): boolean {
+  try {
+    const hash = location.hash;
+    if (hash === "#internal") localStorage.setItem(INTERNAL_KEY, "1");
+    if (hash === "#external") localStorage.removeItem(INTERNAL_KEY);
+    if (hash === "#internal" || hash === "#external") {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+    return localStorage.getItem(INTERNAL_KEY) === "1";
+  } catch {
+    return false; // storage blocked (private window, cleared site data)
+  }
+}
+
 export const analyticsContext: AnalyticsContext = {
   config: customer,
   appVersion: `${__APP_VERSION__}+${__APP_COMMIT__}`,
   browser: browserFamily(navigator.userAgent),
+  internal: internalBrowser(),
 };
 
 /**

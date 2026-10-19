@@ -53,10 +53,12 @@ npm run e2e          # production build in Chromium under the production headers
 
 After each comparison the app sends one event to PostHog Cloud EU (`frontend/src/analytics.ts`); the payload is built in `core/src/analytics.ts` and nothing else is ever sent:
 
-- `reconciliation_completed`: customer slug, app version, config version, browser family (e.g. `chrome-129`), line counts on both sides, matched groups, groups with gaps, unmatched rows on each side, offset applied, whether the supplier invoice was a scan and how many of its rows OCR could not confirm, parser-warning count, parse and reconcile time in ms, and — only when the customer's config sets `analytics.sendDiscrepancyAmount` — the invoice's net gap rounded to ₪10.
+- `reconciliation_completed`: customer slug, app version, config version, browser family (e.g. `chrome-129`), `internal` (see below), line counts on both sides, matched groups, groups with gaps, unmatched rows on each side, offset applied, whether the supplier invoice was a scan and how many of its rows OCR could not confirm, parser-warning count, parse and reconcile time in ms, and — only when the customer's config sets `analytics.sendDiscrepancyAmount` — the invoice's net gap rounded to ₪10.
 - `reconciliation_failed`: the same identifying fields plus a fixed `error_code` (`NOT_PDF`, `FILES_SWAPPED`, `OWN_DOC_NOT_RECOGNIZED`, `UNSUPPORTED_SUPPLIER`, `NO_LINES`, `SCAN_UNREADABLE`, `TEXT_LAYER_BROKEN`, `INTERNAL`). Error messages are never sent: they contain file names.
 
 `distinct_id` is the customer slug and person profiles are off, so no individual user is identified. Requests carry no cookies and no `Referer` (the secret URL path never leaves the page). Sending is fire-and-forget, and the dev server only logs the payload to the console. `core/test/analytics.test.ts` pins the exact property list and checks, on every sample pair, that no supplier name, invoice or document number, product name or file name appears in the payload. In the PostHog project settings, keep "Discard client IP data" on.
+
+To keep our own tests on prod out of the numbers, open the app once in each browser we test from with `#internal` at the end of the URL. That browser then sends `internal: true` (kept in its localStorage; `#external` clears it, and so does clearing site data). In PostHog, Settings → Project → Product analytics → "Filter out internal and test users" holds the filter `internal` ≠ `true` (an event property), so insights hide our events by default.
 
 ## Regression fixtures
 

@@ -4,18 +4,18 @@ import { ExtractionError } from "../src/errors.js";
 import { reconcile } from "../src/reconcile/reconcile.js";
 import { extractCase, extractSample, PAIRS, TEENA_RIMON } from "./helpers.js";
 
-const ctx: AnalyticsContext = { config: TEENA_RIMON, appVersion: "1.0.0+abc1234", browser: "chrome-129" };
+const ctx: AnalyticsContext = { config: TEENA_RIMON, appVersion: "1.0.0+abc1234", browser: "chrome-129", internal: false };
 
 /** The complete list of what may be sent. Adding a property means changing this test (and the privacy statement). */
 const COMPLETED_KEYS = [
-  "customer", "app_version", "config_version", "browser",
+  "customer", "app_version", "config_version", "browser", "internal",
   "supplier_lines", "own_lines", "matched_groups", "discrepancy_count",
   "unmatched_supplier", "unmatched_own", "discrepancy_amount_nis",
   "offset_applied", "supplier_scanned", "ocr_uncertain_lines",
   "parser_warnings", "parse_ms", "reconcile_ms",
   "$process_person_profile",
 ].sort();
-const FAILED_KEYS = ["customer", "app_version", "config_version", "browser", "error_code", "$process_person_profile"].sort();
+const FAILED_KEYS = ["customer", "app_version", "config_version", "browser", "internal", "error_code", "$process_person_profile"].sort();
 /** The only strings allowed in a payload. */
 const ALLOWED_STRINGS = new Set(["phc_test", "reconciliation_completed", "reconciliation_failed", "teena-rimon", "1.0.0+abc1234", "chrome-129"]);
 
@@ -73,6 +73,12 @@ describe("analytics payloads", () => {
     expect(Object.keys(body.properties).sort()).toEqual(FAILED_KEYS);
     expect(body.properties).toMatchObject({ error_code: "FILES_SWAPPED" });
     expect(JSON.stringify(body)).not.toMatch(/[א-ת]/);
+  });
+
+  it("marks events from a browser flagged as ours", () => {
+    const e = failedEvent({ ...ctx, internal: true }, "INTERNAL");
+    expect(posthogBody("phc_test", e).properties).toMatchObject({ internal: true, customer: "teena-rimon" });
+    expect(failedEvent(ctx, "INTERNAL").properties).toMatchObject({ internal: false });
   });
 
   it("reports a scanned invoice and how many of its rows OCR could not confirm", async () => {

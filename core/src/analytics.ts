@@ -15,6 +15,8 @@ export type AnalyticsContext = {
   appVersion: string;
   /** Browser family and major version, e.g. "chrome-129" (see `browserFamily`). */
   browser: string;
+  /** The browser was marked as ours (testing on prod), so dashboards can leave it out. */
+  internal: boolean;
 };
 
 export type CompletedProperties = {
@@ -22,6 +24,7 @@ export type CompletedProperties = {
   app_version: string;
   config_version: number;
   browser: string;
+  internal: boolean;
   supplier_lines: number;
   own_lines: number;
   matched_groups: number;
@@ -45,6 +48,7 @@ export type FailedProperties = {
   app_version: string;
   config_version: number;
   browser: string;
+  internal: boolean;
   error_code: ExtractionErrorCode | "INTERNAL";
 };
 
@@ -100,6 +104,7 @@ function common(ctx: AnalyticsContext) {
     app_version: ctx.appVersion,
     config_version: ctx.config.configVersion,
     browser: ctx.browser,
+    internal: ctx.internal,
   };
 }
 
