@@ -193,3 +193,34 @@ describe("reconcile — documents within a shekel", () => {
     expect(find(above.groups, "S1").flags).toEqual(["quantity"]);
   });
 });
+
+describe("reconcile — rows of the same delivery note", () => {
+  const sLine = (date: string): SupplierLine => ({
+    id: "S1", page: 1, date, docNumber: "SH1", bookRef: "100", description: "מנגו",
+    variety: "", sku: null, packages: 10, quantity: 100, unit: "ק'ג", unitPrice: 10, discountPct: 0, lineTotal: 1000,
+  });
+  const tLine = (date: string, supplierRef: string): OwnLine => ({
+    id: "T1", page: 1, date, ownDocNumber: "1", supplierRef, product: "מנגו", size: "", packageType: "קרטון",
+    packages: 10, quantity: 100, unitPrice: 10, lineTotal: 1000,
+  });
+  const extraction = (own: OwnLine): ExtractionResult => ({
+    supplier: { supplierId: "x", supplierName: "x", invoiceNumber: "1", invoiceDate: null, printedItemsTotal: null, warnings: [],
+      lines: [sLine("2026-09-01")] },
+    own: { documentNumber: "1", againstInvoice: null, printedGrossTotal: null, commercialDiscount: 0, discountPct: 0, warnings: [],
+      lines: [own] },
+    meta: { ownFileName: "a", supplierFileName: "b" },
+  });
+
+  it("match whatever their dates when they share the reference", () => {
+    const result = reconcile(extraction(tLine("2026-09-06", "100")), TEENA_RIMON);
+    expect(result.groups.map(ids)).toEqual(["S1→T1"]);
+    expect(result.groups[0].dateDelta).toBe(5);
+  });
+
+  it("stay within the date window when the reference differs", () => {
+    const result = reconcile(extraction(tLine("2026-09-06", "200")), TEENA_RIMON);
+    expect(result.groups).toEqual([]);
+    expect(result.supplierOnly.map((l) => l.id)).toEqual(["S1"]);
+    expect(result.ownOnly.map((l) => l.id)).toEqual(["T1"]);
+  });
+});

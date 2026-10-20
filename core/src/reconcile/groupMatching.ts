@@ -71,7 +71,7 @@ function candidatesFor(
 ): Candidate[] {
   const out: Candidate[] = [];
   const add = (sGroup: SLine[], tGroup: OLine[]) => {
-    if (!sGroup.every((a) => tGroup.every((b) => withinDays(a.line.date, b.line.date, tol.dateWindowDays)))) return;
+    if (!sGroup.every((a) => tGroup.every((b) => datesFit(a, b, tol)))) return;
     const multi = sGroup.length > 1 || tGroup.length > 1;
     if (multi ? !sumsAgree(sGroup, tGroup, tol, options.weighings) : rejectPair(sGroup[0], tGroup[0], tol)) return;
     out.push({ s: sGroup, t: tGroup, score: scoreGroup(sGroup, tGroup, matcher, tol) });
@@ -149,7 +149,7 @@ function familyRollup(
   for (const [family, s] of byFamily(supplier)) {
     const t = tFamilies.get(family);
     if (!t || s.length + t.length < 3) continue;
-    if (!s.every((a) => t.every((b) => withinDays(a.line.date, b.line.date, tol.dateWindowDays)))) continue;
+    if (!s.every((a) => t.every((b) => datesFit(a, b, tol)))) continue;
     if (!sumsAgree(s, t, tol, true)) continue;
     groups.push({ s, t, score: scoreGroup(s, t, matcher, tol) });
   }
@@ -179,7 +179,7 @@ function absorbLeftovers(
     return Math.max(...scores.map((c) => c.score));
   };
   const datesOk = (x: SLine | OLine, others: (SLine | OLine)[]) =>
-    others.every((o) => withinDays(x.line.date, o.line.date, tol.dateWindowDays));
+    others.every((o) => datesFit(x, o, tol));
   const kg = (rows: (SLine | OLine)[]) => sumOf(rows, (r) => r.line.quantity);
 
   let changed = true;
@@ -363,6 +363,13 @@ function* subsets<T>(items: T[], min: number, max: number, start = 0, acc: T[] =
     yield* subsets(items, min, max, i + 1, acc);
     acc.pop();
   }
+}
+
+/** Rows of the same delivery note (אסמכתא) match whatever their dates; others must be within the window. */
+function datesFit(x: SLine | OLine, y: SLine | OLine, tol: Tolerances): boolean {
+  const [s, t] = "refs" in x ? [x, y as OLine] : [y as SLine, x];
+  if (t.ref != null && s.refs.includes(t.ref)) return true;
+  return withinDays(x.line.date, y.line.date, tol.dateWindowDays);
 }
 
 export function relDiff(a: number, b: number): number {

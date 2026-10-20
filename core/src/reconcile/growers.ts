@@ -3,8 +3,9 @@
  * own way ("דהאן פרותס" ↔ "פירות דהן ובניו בע"מ", "משק חדד שקוף" ↔ "עדי חדד"),
  * while near-identical names can be different growers ("קושמרו ברק" ≠
  * "קושמרו יוסי"). Growers are paired one-to-one, by the delivery notes they
- * share first and by name second; every row then carries a party id, and
- * rows of different parties are never matched.
+ * share first and by name second — a name whose words all appear in the
+ * other ("ערדום" ↔ "מארק ערדום") counts as a full name match. Every row then
+ * carries a party id, and rows of different parties are never matched.
  */
 
 /** Words that say nothing about who the grower is. */
@@ -39,7 +40,8 @@ export function pairGrowers(
     for (const [t, tr] of tRefs) {
       const exact = normalize(alias(s)).join(" ") === normalize(alias(t)).join(" ") || alias(s) === t || alias(t) === s;
       const shared = [...sr].filter((r) => tr.has(r)).length;
-      const score = (exact ? 1 : nameSimilarity(alias(s), alias(t))) + SHARED_REF_POINTS * shared;
+      const name = exact || nameContains(alias(s), alias(t)) ? 1 : nameSimilarity(alias(s), alias(t));
+      const score = name + SHARED_REF_POINTS * shared;
       if (exact || score > MIN_SCORE) candidates.push({ s, t, score, exact });
     }
   }
@@ -92,11 +94,22 @@ function skeleton(word: string): string {
     .replace(/ץ/g, "צ");
 }
 
+/** The name's words, compared without vowel letters and noise words. */
+function words(name: string): Set<string> {
+  return new Set(normalize(name).map(skeleton).filter(Boolean));
+}
+
 /** Share of the longer name's words that the other name also has (0..1). */
 export function nameSimilarity(a: string, b: string): number {
-  const sa = new Set(normalize(a).map(skeleton).filter(Boolean));
-  const sb = new Set(normalize(b).map(skeleton).filter(Boolean));
+  const sa = words(a);
+  const sb = words(b);
   if (sa.size === 0 || sb.size === 0) return 0;
   const shared = [...sa].filter((w) => sb.has(w)).length;
   return shared / Math.max(sa.size, sb.size);
+}
+
+/** Every word of one name is also in the other (whole words): "ערדום" ⊂ "מארק ערדום", but "לוי" ⊄ "לויתן". */
+export function nameContains(a: string, b: string): boolean {
+  const [small, large] = [words(a), words(b)].sort((x, y) => x.size - y.size);
+  return small.size > 0 && [...small].every((w) => large.has(w));
 }

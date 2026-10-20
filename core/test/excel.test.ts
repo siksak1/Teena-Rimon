@@ -4,7 +4,7 @@ import { extractExcel } from "../src/excel/extract.js";
 import { detectPair, MissingColumnsError, readLayout } from "../src/excel/columns.js";
 import type { Cell } from "../src/excel/read.js";
 import type { MatchGroup } from "../src/model.js";
-import { nameSimilarity, pairGrowers } from "../src/reconcile/growers.js";
+import { nameContains, nameSimilarity, pairGrowers } from "../src/reconcile/growers.js";
 import { reconcile } from "../src/reconcile/reconcile.js";
 import { extractSample, PAIRS, readSample, TEENA_RIMON } from "./helpers.js";
 
@@ -270,6 +270,30 @@ describe("growers", () => {
     expect(parties.ownParty("משק הגפן")).toBe(parties.supplierParty("א. כהן"));
   });
 
+  it("pairs a name contained in the other, by whole words", () => {
+    const parties = pairGrowers([{ grower: "ערדום", refs: ["1"] }], [{ grower: "מארק ערדום", refs: ["2"] }], {}, "ת\"ר");
+    expect(parties.ownParty("מארק ערדום")).toBe(parties.supplierParty("ערדום"));
+    expect(parties.warnings).toEqual([]);
+    expect(nameContains("משק מלצר", "משק מלצר בע\"מ")).toBe(true);
+    expect(nameContains("לוי", "לויתן")).toBe(false);
+    expect(nameContains("קושמרו ברק", "קושמרו יוסי")).toBe(false);
+    expect(nameContains("משק", "משק מלצר")).toBe(false);
+  });
+
+  it("gives a contained name to the grower it shares delivery notes with", () => {
+    const parties = pairGrowers(
+      [{ grower: "קושמרו", refs: ["5"] }],
+      [
+        { grower: "קושמרו ברק", refs: ["4"] },
+        { grower: "קושמרו יוסי", refs: ["5"] },
+      ],
+      {},
+      "ת\"ר",
+    );
+    expect(parties.ownParty("קושמרו יוסי")).toBe(parties.supplierParty("קושמרו"));
+    expect(parties.ownParty("קושמרו ברק")).not.toBe(parties.supplierParty("קושמרו"));
+  });
+
   it("compares names without vowel letters and noise words", () => {
     expect(nameSimilarity("דהאן פרותס", "פירות דהן ובניו בע\"מ")).toBe(1);
     expect(nameSimilarity("קושמרו ברק", "קושמרו יוסי")).toBe(0.5);
@@ -323,5 +347,19 @@ describe("Excel reports — reconciliation", async () => {
   it("leaves the PDF path untouched (no grower parties)", async () => {
     const pdf = reconcile(await extractSample("granot"), TEENA_RIMON);
     expect(pdf.warnings.some((w) => w.includes("מגדל"))).toBe(false);
+  });
+});
+
+describe("Excel reports — reconciliation (October pair)", async () => {
+  const result = reconcile(await extractSample("excelOct"), TEENA_RIMON);
+
+  it("matches rows of the same delivery note across a 3-day gap", () => {
+    const s = result.groups.filter((g) => g.supplierLines.some((l) => l.docNumber === "102190"));
+    expect(s.flatMap((g) => g.supplierLines.map((l) => l.id)).sort()).toEqual(["S69", "S70", "S71", "S72", "S73", "S74"]);
+    expect(s.flatMap((g) => g.ownLines.map((l) => l.id)).sort()).toEqual(["T25", "T26", "T27", "T28", "T29", "T30"]);
+  });
+
+  it("pairs a grower whose name is contained in the other report's", () => {
+    expect(result.warnings.filter((w) => w.includes("ערדום"))).toEqual([]);
   });
 });
