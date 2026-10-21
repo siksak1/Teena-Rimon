@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { verifyAiReading, type AiReading } from "../src/ai/verify.js";
+import { genericTableParser } from "../src/parsers/generic.js";
 import { granotParser } from "../src/parsers/granot.js";
 import { loadPdf, type PdfDocument } from "../src/pdf/layout.js";
 import { readingFrom } from "./aiReadings.js";
@@ -61,5 +62,14 @@ describe("checking the AI's reading against the invoice", () => {
     const { verified, profile } = verifyAiReading(reading, doc, options);
     expect(verified).toBe(true);
     expect(profile).toBeNull();
+  });
+
+  it("accepts a total off by the rounding amount the invoice prints (Gilboa: lines 52,878.90, total 52,879.10, rounding −0.21)", async () => {
+    const doc = await loadPdf(await readSample(PAIRS.gilboa.supplier));
+    const reading = readingFrom(genericTableParser.parse(doc));
+    reading.vatId = "570046193";
+    reading.printedItemsTotal = 52879.1;
+    const { verified } = verifyAiReading(reading, doc, { ...options, vatHint: "570046193" });
+    expect(verified).toBe(true);
   });
 });

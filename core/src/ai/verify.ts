@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { SupplierInvoice, SupplierLine } from "../model.js";
-import { parseWithProfile, readAmount } from "../parsers/generic.js";
+import { parseWithProfile, printedAdjustments, readAmount } from "../parsers/generic.js";
 import { readProfile, type SupplierProfile } from "../parsers/profile.js";
 import type { PdfDocument } from "../pdf/layout.js";
 import { parseDate, round2 } from "../pdf/text.js";
@@ -119,7 +119,9 @@ export function verifyAiReading(
   const total = reading.printedItemsTotal;
   // The items total is printed, or (a discount applied once in the footer) the gross total before it.
   const gross = round2(lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0));
-  const totalHolds = total != null && Math.abs(sum - total) <= TOTAL_TOLERANCE && (isPrinted(total) || isPrinted(gross));
+  // A gap no larger than a rounding / general-discount amount printed on the invoice is accepted, as by the table parser.
+  const allowed = Math.max(TOTAL_TOLERANCE, ...printedAdjustments(doc).map((a) => Math.abs(a) + TOTAL_TOLERANCE));
+  const totalHolds = total != null && Math.abs(sum - total) <= allowed && (isPrinted(total) || isPrinted(gross));
   const verified = lines.length > 0 && unconfirmed === 0 && totalHolds;
 
   const warnings = [

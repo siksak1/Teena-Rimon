@@ -861,8 +861,8 @@ const MAX_ADJUSTMENT = 1;
 /** An amount can print a few points off its label's row. */
 const ADJUSTMENT_REACH = 4;
 
-/** Small amounts printed beside "הנחה כללית", "עיגול" or "הפרש". */
-function printedAdjustments(doc: PdfDocument): number[] {
+/** Small amounts printed beside "הנחה כללית", "עיגול" or "הפרש". Exported for the AI reading's check. */
+export function printedAdjustments(doc: PdfDocument): number[] {
   const labels = doc.rows.filter((r) => ADJUSTMENT_ROW.test(r.text));
   return labels
     .flatMap((label) => doc.rows.filter((r) => r.page === label.page && Math.abs(r.y - label.y) <= ADJUSTMENT_REACH))
