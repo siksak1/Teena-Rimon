@@ -26,7 +26,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 require_customer "$SLUG"
-[[ "$SLUG" != "ai-test" ]] || die "ai-test is for local testing only (every supplier goes to the AI)"
+# ai-test sends every supplier invoice to the learned layout or the AI: preview URLs only, never production.
+[[ "$SLUG" != "ai-test" || "$CHANNEL" == preview ]] || die "ai-test is for testing the AI fallback: use --preview"
 load_stack
 
 point_urls() { # <build>

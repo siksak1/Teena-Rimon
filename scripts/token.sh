@@ -38,6 +38,7 @@ case "$CMD" in
       esac
       shift
     done
+    [[ "$SLUG" != "ai-test" || "$CHANNEL" == preview ]] || die "ai-test gets preview URLs only (--preview)"
     if [[ -z "$BUILD" ]]; then
       BUILD=$(kvs_routes | jq -r --arg slug "$SLUG" 'select(.slug == $slug and .channel == "production") | .build' | head -1)
       [[ -n "$BUILD" ]] || die "$SLUG has no production URL to copy the build from — pass --build <build> (see scripts/release.sh $SLUG --list)"
