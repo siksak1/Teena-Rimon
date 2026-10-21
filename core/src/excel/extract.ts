@@ -2,13 +2,13 @@ import type { CustomerConfig } from "../customer.js";
 import { ExtractionError } from "../errors.js";
 import type { ExtractionResult } from "../model.js";
 import { detectPair, FIELD_LABELS, MissingColumnsError, type PairDetection, readLayout } from "./columns.js";
-import { parseOwnSheet, parseSupplierSheet } from "./formats.js";
+import { markUnitPricedProducts, parseOwnSheet, parseSupplierSheet } from "./formats.js";
 import { readDataSheet } from "./read.js";
 
 export type ExcelInput = {
-  /** The wholesaler's own report (Teena-Rimon: receiving weighings). */
+  /** The wholesaler's own report (Teena-Rimon: describes items by variety, size and grade). */
   ownXlsx: Uint8Array;
-  /** The supplier's sales report, covering many growers. */
+  /** The supplier's report, covering many growers. */
   supplierXlsx: Uint8Array;
   ownFileName: string;
   supplierFileName: string;
@@ -40,9 +40,9 @@ export async function extractExcel(input: ExcelInput, config: CustomerConfig): P
     throw new ExtractionError(`בקובץ "${fileName}" לא זוהו עמודות של: ${missing}`, "MISSING_COLUMN");
   }
 
-  // The sales report describes each item further (variety, size, grade); the
-  // receiving report doesn't. The other way round, the files were swapped.
-  if (columns.own.extras.length > 0 && columns.supplier.extras.length === 0) {
+  // The wholesaler's report describes each item further (variety, size, grade);
+  // the supplier's doesn't. The other way round, the files were swapped.
+  if (columns.supplier.extras.length > 0 && columns.own.extras.length === 0) {
     throw new ExtractionError(
       `נראה שהקבצים הוחלפו — הדוח של ${config.displayName} הועלה במקום דוח הספק`,
       "FILES_SWAPPED",
@@ -51,6 +51,7 @@ export async function extractExcel(input: ExcelInput, config: CustomerConfig): P
 
   const supplier = parseSupplierSheet(supplierLayout, columns.supplier);
   const own = parseOwnSheet(ownLayout, columns.own, config.displayName);
+  markUnitPricedProducts(supplier.lines, own.lines);
   if (supplier.lines.length === 0) throw new ExtractionError(`לא נמצאו שורות פריטים בדוח הספק`, "NO_LINES");
   if (own.lines.length === 0) throw new ExtractionError(`לא נמצאו שורות פריטים בדוח ${config.displayName}`, "NO_LINES");
 

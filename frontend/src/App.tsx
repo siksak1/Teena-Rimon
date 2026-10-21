@@ -164,7 +164,7 @@ export default function App() {
           <section className="hero-copy">
             <h1>השוואת דוח ספק מול {customer.displayName}</h1>
             <p>
-              העלו את דוח הקליטה של {customer.displayName} ואת דוח המכירות של הספק (קובצי אקסל). השורות
+              העלו את הדוח של {customer.displayName} ואת הדוח של הספק (קובצי אקסל). השורות
               מוצמדות בתוך כל מגדל לפי תעודה, תאריך, פריט ומשקל — כולל שקילות שמתחברות למכירה אחת — והפערים
               מוצגים לפי סיבה.
             </p>
@@ -183,7 +183,7 @@ export default function App() {
           <FileDropZone
             key={`own-${mode}`}
             label={mode === "excel" ? `דוח ${customer.displayName}` : `חשבונית ${customer.displayName}`}
-            hint={mode === "excel" ? "דוח קליטה עם מגדל, תאריך, אסמכתא, פריט, משקל ומחיר — בכל סדר ובכל שמות עמודות" : customer.ownDocument.label}
+            hint={mode === "excel" ? "דוח עם תעודה, מגדל, תאריך, פריט (וזן, גודל, איכות), משקל ומחיר — בכל סדר ובכל שמות עמודות" : customer.ownDocument.label}
             file={ownFile}
             onFile={pick(setOwnFile)}
             accent="ours"
@@ -192,7 +192,7 @@ export default function App() {
           <FileDropZone
             key={`supplier-${mode}`}
             label={mode === "excel" ? "דוח ספק" : "חשבונית ספק"}
-            hint={mode === "excel" ? "דוח מכירות עם תעודת משלוח, מגדל, פריט, משקל ומחיר — בכל סדר ובכל שמות עמודות" : "חשבונית מס מרכזת של הספק"}
+            hint={mode === "excel" ? "דוח הספק עם אסמכתא, מגדל, תאריך, פריט, משקל ומחיר — בכל סדר ובכל שמות עמודות" : "חשבונית מס מרכזת של הספק"}
             file={supplierFile}
             onFile={pick(setSupplierFile)}
             accent="supplier"

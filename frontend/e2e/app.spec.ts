@@ -139,19 +139,19 @@ test("compares two Excel reports after switching modes; only a counts-only event
   await page.getByRole("radio", { name: "דוחות אקסל" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("השוואת דוח ספק מול תאנה ורימון");
   const inputs = page.locator('input[type="file"]');
-  await inputs.nth(0).setInputFiles(sample("excel/תאנה רוימון.xlsx"));
-  await inputs.nth(1).setInputFiles(sample("excel/דוחות-תאנה ורימון-22.9.26 (1).xlsx"));
+  await inputs.nth(0).setInputFiles(sample("excel/דוחות-תאנה ורימון-22.9.26 (1).xlsx"));
+  await inputs.nth(1).setInputFiles(sample("excel/תאנה רוימון.xlsx"));
   await page.getByRole("button", { name: "השוואת הדוחות" }).click();
 
   await expect(page.locator(".results h2")).toHaveText("דוח ספק מול דוח תאנה ורימון (אקסל)");
   await expect(page.locator(".total-card--hot strong")).toContainText("1,589.20");
-  await expect(page.locator(".count-strip")).toContainText("רק אצל הספק: 1");
+  await expect(page.locator(".count-strip")).toContainText("רק אצל תאנה ורימון: 1");
   await expect(page.getByRole("columnheader", { name: "מגדל" }).first()).toBeVisible();
 
   await expect.poll(() => watch.analytics.length).toBe(1);
   expect(watch.analytics[0]).toMatchObject({
     event: "reconciliation_completed",
-    properties: { supplier_lines: 50, own_lines: 54, unmatched_supplier: 1 },
+    properties: { supplier_lines: 54, own_lines: 50, unmatched_supplier: 0, unmatched_own: 1 },
   });
   expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]|xlsx/);
 
@@ -258,16 +258,41 @@ test("reads Excel reports with other column names, and says which columns it use
   const watch = await open(page);
   await page.getByRole("radio", { name: "דוחות אקסל" }).click();
   const inputs = page.locator('input[type="file"]');
-  await inputs.nth(0).setInputFiles(sample("excel/מארק מחירי תאנה ורימון.xlsx"));
-  await inputs.nth(1).setInputFiles(sample("excel/דוחות עם מחירים-תאנה ורימון עד ה-7.10.26.xlsx"));
+  await inputs.nth(0).setInputFiles(sample("excel/דוחות עם מחירים-תאנה ורימון עד ה-7.10.26.xlsx"));
+  await inputs.nth(1).setInputFiles(sample("excel/מארק מחירי תאנה ורימון.xlsx"));
   await page.getByRole("button", { name: "השוואת הדוחות" }).click();
 
   await expect(page.locator(".total-card--hot strong")).toContainText("20,018.77");
-  await expect(page.locator(".count-strip")).toContainText("רק אצל הספק: 21");
+  await expect(page.locator(".count-strip")).toContainText("רק אצל תאנה ורימון: 21");
   await page.getByText("העמודות שזוהו").click();
   await expect(page.locator(".results__columns")).toContainText("תעודת משלוח ← תעודה");
   await expect(page.locator(".results__columns")).toContainText("תעודת משלוח ← אסמכתא");
 
+  // The export: one row per delivery note and product, both reports side by side.
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "ייצוא לאקסל" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("השוואת ספק - מארק מחירי תאנה ורימון.xlsx");
+  const { readDataSheet } = await import("../../core/src/excel/read.js");
+  const fs = await import("node:fs");
+  const rows = (await readDataSheet(new Uint8Array(fs.readFileSync((await download.path())!))))!;
+  expect(rows[0]).toEqual([
+    "תאריך",
+    "אסמכתא",
+    "מגדל",
+    "תוצרת",
+    "סך הכל משקל אצל הספק",
+    "סך הכל משקל תאנה ורימון",
+    "הפרש משקלים",
+    "סך הכל עלות הספק",
+    "סך הכל עלות תאנה ורימון",
+    "הפרש סך הכל עלות",
+  ]);
+  expect(rows).toHaveLength(1 + 63 + 1);
+  expect(rows[1].slice(1, 10)).toEqual([94, "ביטן ראובן", "חציל", 2427, 2427, 0, 12897, 12820.1, -76.9]);
+  // A price of 0 leaves the cost for the user to fill in.
+  expect(rows.find((r) => r[1] === 909907)!.slice(7)).toEqual(["-", 4802.5, "-"]);
+  expect(rows[rows.length - 1][0]).toBe('סה"כ');
   expect(watch.consoleErrors).toEqual([]);
 });
 

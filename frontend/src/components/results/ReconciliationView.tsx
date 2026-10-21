@@ -52,8 +52,8 @@ function Results({ extraction, result }: Props) {
     setExporting("busy");
     try {
       // Loaded on demand so the spreadsheet writer stays out of the main bundle.
-      const { exportReconciliation } = await import("./exportExcel");
-      await exportReconciliation(extraction, result);
+      const { exportExcelSummary, exportReconciliation } = await import("./exportExcel");
+      await (excel ? exportExcelSummary(extraction) : exportReconciliation(extraction, result));
       setExporting("idle");
     } catch (err) {
       console.error(err);

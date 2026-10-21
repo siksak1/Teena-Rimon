@@ -1,3 +1,4 @@
+import { type SummaryRow, summarizeExcel } from "@core/excel/summary.js";
 import type { ExtractionResult, MatchGroup, OwnLine, ReconciliationResult, SupplierLine } from "@core/model.js";
 import customer from "@customer-config";
 import writeXlsxFile, { type Cell, type Row, type Sheet } from "write-excel-file/browser";
@@ -46,13 +47,10 @@ const GROUP_HEADERS = [
 ];
 const GROUP_WIDTHS = [8, 10, 10, 20, 32, 9, 10, 9, 8, 12, 18, 50, 11, 10, 10, 12];
 
-/** Excel reports cover many growers: a grower column after the side. */
-const withGrower = <T>(row: T[], grower: T): T[] => [row[0], row[1], grower, ...row.slice(2)];
-
 /** Each line of each group, then a summary row with the group's status and differences. */
-function groupRows(groups: MatchGroup[], ownDiscountPct: number, growers: boolean): Row[] {
-  const rows: Row[] = [header(growers ? withGrower(GROUP_HEADERS, "מגדל") : GROUP_HEADERS)];
-  const push = (row: Row, grower: string | undefined) => rows.push(growers ? withGrower(row, text(grower ?? null)) : row);
+function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
+  const rows: Row[] = [header(GROUP_HEADERS)];
+  const push = (row: Row) => rows.push(row);
   for (const g of groups) {
     for (const l of g.supplierLines) {
       push([
@@ -66,7 +64,7 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number, growers: boolea
         number(l.unitPrice),
         number(l.discountPct, PERCENT),
         number(l.lineTotal, MONEY),
-      ], l.grower);
+      ]);
     }
     for (const l of g.ownLines) {
       push([
@@ -80,7 +78,7 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number, growers: boolea
         number(l.unitPrice),
         number(ownDiscountPct, PERCENT),
         number(ownNet(l, ownDiscountPct), MONEY),
-      ], l.grower);
+      ]);
     }
     const fill = g.netDiff !== 0 ? "#FBE9E7" : g.flags.length ? "#FFF6E5" : "#EAF5EE";
     const cell = (value?: string | number | null, format?: string): Cell => ({
@@ -94,7 +92,7 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number, growers: boolea
     rows.push([
       cell(g.id),
       cell("סיכום קבוצה"),
-      ...Array.from({ length: growers ? 9 : 8 }, () => cell()),
+      ...Array.from({ length: 8 }, () => cell()),
       cell(g.flags.length ? g.flags.map((f) => FLAG_LABEL[f]).join(", ") : "תואם"),
       cell(g.notes.join("\n")),
       cell(g.packagesDiff || null, SIGNED_NUM),
@@ -106,23 +104,7 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number, growers: boolea
   return rows;
 }
 
-function supplierOnlyRows(lines: SupplierLine[], excel: boolean): Row[] {
-  if (excel) {
-    return [
-      header(["שורה", "תאריך", "מגדל", "תעודה", "פריט", "אריזות", 'ק"ג', "מחיר", 'סה"כ']),
-      ...lines.map((l): Row => [
-        l.id,
-        date(l.date),
-        text(l.grower ?? null),
-        text(l.docNumber),
-        supplierItemMarked(l),
-        number(l.packages),
-        number(l.quantity),
-        number(l.unitPrice),
-        number(l.lineTotal, MONEY),
-      ]),
-    ];
-  }
+function supplierOnlyRows(lines: SupplierLine[]): Row[] {
   return [
     header(["שורה", "תאריך", "תעודה", "פנקס", "פריט", "אריזות", 'ק"ג', "מחיר", "הנחה", 'סה"כ נטו']),
     ...lines.map((l): Row => [
@@ -140,22 +122,7 @@ function supplierOnlyRows(lines: SupplierLine[], excel: boolean): Row[] {
   ];
 }
 
-function ownOnlyRows(lines: OwnLine[], excel: boolean): Row[] {
-  if (excel) {
-    return [
-      header(["שורה", "תאריך", "מגדל", "אסמכתא", "פריט", 'ק"ג', "מחיר", 'סה"כ']),
-      ...lines.map((l): Row => [
-        l.id,
-        date(l.date),
-        text(l.grower ?? null),
-        text(l.supplierRef),
-        ownItem(l),
-        number(l.quantity),
-        number(l.unitPrice),
-        number(l.lineTotal, MONEY),
-      ]),
-    ];
-  }
+function ownOnlyRows(lines: OwnLine[]): Row[] {
   return [
     header(["שורה", "תאריך", `מסמך ${customer.shortName}`, "אסמכתא", "פריט", "אריזות", 'ק"ג', "מחיר", "סכום (לפני הנחה)"]),
     ...lines.map((l): Row => [
@@ -177,27 +144,18 @@ function summaryRows(extraction: ExtractionResult, result: ReconciliationResult,
   const { totals } = result;
   const ownName = customer.displayName;
   const label = (value: string): Cell => ({ value, fontWeight: "bold" });
-  const head: Row[] =
-    extraction.meta.format === "excel"
-      ? [
-          [label("דוח ספק"), extraction.meta.supplierFileName],
-          [label(`דוח ${ownName}`), extraction.meta.ownFileName],
-          [],
-          [label('ספק — סה"כ (ק"ג × מחיר)'), number(totals.supplierNet, MONEY)],
-          [label(`${ownName} — סה"כ (ק"ג × מחיר)`), number(totals.ownNet, MONEY)],
-        ]
-      : [
-          [label("ספק"), supplier.supplierName],
-          [label("חשבונית ספק"), supplier.invoiceNumber],
-          [label("תאריך חשבונית"), date(supplier.invoiceDate)],
-          [label(`מסמך ${ownName}`), own.documentNumber],
-          [label("כנגד חשבונית"), text(own.againstInvoice)],
-          [],
-          [label('ספק — סה"כ פריטים נטו'), number(totals.supplierNet, MONEY)],
-          [label(`${ownName} — סה"כ לפני הנחה`), number(totals.ownGross, MONEY)],
-          [label(`${ownName} — הנחה מסחרית`), number(totals.ownDiscountPct, PERCENT)],
-          [label(`${ownName} — סה"כ נטו`), number(totals.ownNet, MONEY)],
-        ];
+  const head: Row[] = [
+    [label("ספק"), supplier.supplierName],
+    [label("חשבונית ספק"), supplier.invoiceNumber],
+    [label("תאריך חשבונית"), date(supplier.invoiceDate)],
+    [label(`מסמך ${ownName}`), own.documentNumber],
+    [label("כנגד חשבונית"), text(own.againstInvoice)],
+    [],
+    [label('ספק — סה"כ פריטים נטו'), number(totals.supplierNet, MONEY)],
+    [label(`${ownName} — סה"כ לפני הנחה`), number(totals.ownGross, MONEY)],
+    [label(`${ownName} — הנחה מסחרית`), number(totals.ownDiscountPct, PERCENT)],
+    [label(`${ownName} — סה"כ נטו`), number(totals.ownNet, MONEY)],
+  ];
   return [
     ...head,
     [label(`פער (${ownName} פחות ספק)`), number(totals.diff, SIGNED_MONEY)],
@@ -212,34 +170,103 @@ function summaryRows(extraction: ExtractionResult, result: ReconciliationResult,
   ];
 }
 
-/** Writes the whole comparison — every table, regardless of what is collapsed or filtered on screen. */
+/** PDF invoices: writes the whole comparison — every table, regardless of what is collapsed or filtered on screen. */
 export async function exportReconciliation(extraction: ExtractionResult, result: ReconciliationResult): Promise<void> {
   const ownDiscountPct = result.totals.ownDiscountPct;
-  const excel = extraction.meta.format === "excel";
-  const groupWidths = excel ? withGrower(GROUP_WIDTHS, 18) : GROUP_WIDTHS;
   const offsetIds = new Set(result.offset.groups.map((g) => g.id));
   const mainGroups = result.groups.filter((g) => !offsetIds.has(g.id));
 
   const sheets = [
     sheet("סיכום", summaryRows(extraction, result, mainGroups), [30, 40]),
-    sheet("שורות שהוצמדו", groupRows(mainGroups, ownDiscountPct, excel), groupWidths),
-    sheet(
-      "רק אצל הספק",
-      supplierOnlyRows(result.supplierOnly, excel),
-      excel ? [8, 10, 18, 12, 32, 9, 10, 9, 12] : [8, 10, 14, 12, 32, 9, 10, 9, 8, 12],
-    ),
-    sheet(
-      `רק אצל ${customer.shortName}`,
-      ownOnlyRows(result.ownOnly, excel),
-      excel ? [8, 10, 18, 12, 32, 10, 9, 12] : [8, 10, 12, 14, 32, 9, 10, 9, 16],
-    ),
+    sheet("שורות שהוצמדו", groupRows(mainGroups, ownDiscountPct), GROUP_WIDTHS),
+    sheet("רק אצל הספק", supplierOnlyRows(result.supplierOnly), [8, 10, 14, 12, 32, 9, 10, 9, 8, 12]),
+    sheet(`רק אצל ${customer.shortName}`, ownOnlyRows(result.ownOnly), [8, 10, 12, 14, 32, 9, 10, 9, 16]),
   ];
   if (result.offset.applies && result.offset.groups.length) {
-    sheets.push(sheet("קיזוז", groupRows(result.offset.groups, ownDiscountPct, excel), groupWidths));
+    sheets.push(sheet("קיזוז", groupRows(result.offset.groups, ownDiscountPct), GROUP_WIDTHS));
   }
 
-  const name = excel
-    ? `התאמה - דוחות אקסל - ${extraction.meta.supplierFileName.replace(/\.xlsx$/i, "")}`
-    : `התאמה - ${extraction.supplier.supplierName} - ${extraction.supplier.invoiceNumber}`;
-  await writeXlsxFile(sheets).toFile(`${name.replace(/[\\/:*?"<>|]/g, "_")}.xlsx`);
+  const name = `התאמה - ${extraction.supplier.supplierName} - ${extraction.supplier.invoiceNumber}`;
+  await writeXlsxFile(sheets).toFile(`${fileName(name)}.xlsx`);
+}
+
+const fileName = (name: string) => name.replace(/[\\/:*?"<>|]/g, "_");
+
+/* Excel reports: one row per delivery note and product, both reports side by side. */
+
+/** Accounting format: thousands, no decimals shown, zero as "-". */
+const ACCOUNTING = '_ * #,##0_ ;_ * \\-#,##0_ ;_ * "-"??_ ;_ @_ ';
+const BORDER = { borderStyle: "thin", borderColor: "#000000" } as const;
+/** A cost that can't be totalled because a price is 0: the user has to fill it in. */
+const MISSING_PRICE = { value: "-", align: "center", backgroundColor: "#FFF2CC", ...BORDER } as const;
+const SUMMARY_WIDTHS = [10, 10, 27, 18, 11, 14, 11, 13, 12, 12];
+
+function summaryHeader(): Row {
+  const ownName = customer.displayName;
+  return [
+    "תאריך",
+    "אסמכתא",
+    "מגדל",
+    "תוצרת",
+    "סך הכל משקל אצל הספק",
+    `סך הכל משקל ${ownName}`,
+    "הפרש משקלים",
+    "סך הכל עלות הספק",
+    `סך הכל עלות ${ownName}`,
+    "הפרש סך הכל עלות",
+  ].map((value) => ({
+    value,
+    fontWeight: "bold",
+    backgroundColor: "#E2EFDA",
+    align: "center",
+    alignVertical: "center",
+    wrap: true,
+    height: 45,
+    ...BORDER,
+  }));
+}
+
+function summaryRow(r: SummaryRow): Row {
+  const amount = (value: number | null): Cell =>
+    value == null ? MISSING_PRICE : { value, format: ACCOUNTING, ...BORDER };
+  const ref = /^\d+$/.test(r.ref) ? Number(r.ref) : r.ref;
+  return [
+    r.date ? { ...date(r.date)!, format: "dd/mm/yyyy", ...BORDER } : { value: undefined, ...BORDER },
+    ref === "" ? { value: undefined, ...BORDER } : { value: ref, ...BORDER },
+    { value: r.grower || undefined, ...BORDER },
+    { value: r.product || undefined, ...BORDER },
+    amount(r.supplier.weight),
+    amount(r.own.weight),
+    amount(r.weightDiff),
+    amount(r.supplier.cost),
+    amount(r.own.cost),
+    amount(r.costDiff),
+  ];
+}
+
+function summarySheet(name: string, rows: SummaryRow[]): Sheet<Blob> {
+  const data = [summaryHeader(), ...rows.map(summaryRow)];
+  if (rows.length) {
+    const last = rows.length + 1;
+    const bold = { fontWeight: "bold", ...BORDER } as const;
+    data.push([
+      { value: 'סה"כ', ...bold },
+      { value: undefined, ...bold },
+      { value: undefined, ...bold },
+      { value: undefined, ...bold },
+      ...["E", "F", "G", "H", "I", "J"].map(
+        (col): Cell => ({ type: "Formula", value: `SUM(${col}2:${col}${last})`, format: ACCOUNTING, ...bold }),
+      ),
+    ]);
+  }
+  return sheet(name, data, SUMMARY_WIDTHS);
+}
+
+/** Excel reports: the side-by-side comparison, plus Teena-Rimon rows from outside the supplier's period. */
+export async function exportExcelSummary(extraction: ExtractionResult): Promise<void> {
+  const { rows, outOfPeriod } = summarizeExcel(extraction, customer);
+  const sheets = [summarySheet("השוואה מרוכזת", rows)];
+  if (outOfPeriod.length) sheets.push(summarySheet("מחוץ לתקופה", outOfPeriod));
+  const name = `השוואת ספק - ${extraction.meta.supplierFileName.replace(/\.xlsx$/i, "")}`;
+  await writeXlsxFile(sheets).toFile(`${fileName(name)}.xlsx`);
 }

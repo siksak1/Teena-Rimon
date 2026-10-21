@@ -15,46 +15,47 @@ describe("Excel reports — reading", async () => {
 
   it("reads every row of both reports, money as weight × price", () => {
     expect(meta.format).toBe("excel");
-    expect(supplier.lines).toHaveLength(50);
-    expect(own.lines).toHaveLength(54);
+    expect(supplier.lines).toHaveLength(54);
+    expect(own.lines).toHaveLength(50);
     expect(supplier.warnings).toEqual([]);
     expect(own.warnings).toEqual([]);
     expect(supplier.lines[0]).toMatchObject({
-      date: "2026-08-31",
-      docNumber: "1697",
-      grower: "יורם פורטל",
-      description: "רימון",
-      variety: "עמק",
-      packages: 72,
-      quantity: 550,
-      unitPrice: 5,
-      discountPct: 0,
-      lineTotal: 2750,
-      page: 2,
-    });
-    expect(own.lines[0]).toMatchObject({
       date: "2026-09-02",
-      supplierRef: "909805",
+      docNumber: "909805",
       grower: "קושמרו ברק",
-      product: "עגבניה",
+      description: "עגבניה",
       packages: null,
       quantity: 574,
       unitPrice: 5.2,
+      discountPct: 0,
       lineTotal: 2984.8,
+      page: 2,
+    });
+    expect(own.lines[0]).toMatchObject({
+      date: "2026-08-31",
+      supplierRef: "1697",
+      ownDocNumber: "1697",
+      grower: "יורם פורטל",
+      product: "רימון",
+      size: "עמק",
+      packages: 72,
+      quantity: 550,
+      unitPrice: 5,
+      lineTotal: 2750,
     });
     expect(own.discountPct).toBe(0);
   });
 
-  it("joins variety, size and grade into the supplier's name", () => {
-    expect(supplier.lines.find((l) => l.docNumber === "909864" && l.quantity === 1829)!.variety).toBe(
+  it("joins variety, size and grade into Teena-Rimon's item name", () => {
+    expect(own.lines.find((l) => l.supplierRef === "909864" && l.quantity === 1829)!.size).toBe(
       "איקרם שחור XXL פרימיום",
     );
   });
 
-  it("marks products sold by the piece", () => {
+  it("marks products sold by the piece, from the report that shows the pieces", () => {
     const pineapple = supplier.lines.filter((l) => l.description === "אננס");
     expect(pineapple.every((l) => l.unit === "יח'")).toBe(true);
-    expect(supplier.lines.find((l) => l.description === "פטאיה")!.unit).toBe('ק"ג');
+    expect(supplier.lines.find((l) => l.description === "עגבניה")!.unit).toBe('ק"ג');
   });
 });
 
@@ -63,26 +64,26 @@ describe("Excel reports — other layouts (October pair)", async () => {
 
   it("finds the columns whatever they are called", () => {
     expect(meta.excelColumns).toEqual({
-      own: { date: "תאריך", product: "תוצרת", grower: "מגדל", weight: "משקל נטו", price: "מחיר", packages: "כמות", doc: "אסמכתא", ownDoc: "מספר תעודה" },
-      supplier: { date: "תאריך", product: "תאור", grower: "שם מגדל", weight: "משקל מכירה", price: "מחיר מכירה", packages: "כמות", doc: "תעודה" },
+      own: { date: "תאריך", product: "תאור", grower: "שם מגדל", weight: "משקל מכירה", price: "מחיר מכירה", packages: "כמות", doc: "תעודה" },
+      supplier: { date: "תאריך", product: "תוצרת", grower: "מגדל", weight: "משקל נטו", price: "מחיר", packages: "כמות", doc: "אסמכתא" },
     });
     expect([...supplier.warnings, ...own.warnings]).toEqual([]);
   });
 
-  it("links by the reference both reports share; Teena-Rimon's own number is its document", () => {
-    expect(supplier.lines).toHaveLength(141);
-    expect(own.lines).toHaveLength(168);
-    expect(own.lines[0]).toMatchObject({
+  it("links by the reference both reports share, not the supplier's own document number", () => {
+    expect(supplier.lines).toHaveLength(168);
+    expect(own.lines).toHaveLength(141);
+    expect(supplier.lines[0]).toMatchObject({
       grower: "מארק ערדום",
       date: "2026-10-08",
-      supplierRef: "823",
-      ownDocNumber: "24017",
-      product: "מלון",
+      docNumber: "823",
+      bookRef: null,
+      description: "מלון",
       packages: 66,
       quantity: 593,
       unitPrice: 3,
     });
-    expect(supplier.lines[0]).toMatchObject({ docNumber: "20955", grower: "אופיר בן יוסף", description: "פפאיה", variety: "תאילנדית ירוקה", packages: 34, quantity: 200, unitPrice: 5 });
+    expect(own.lines[0]).toMatchObject({ supplierRef: "20955", ownDocNumber: "20955", grower: "אופיר בן יוסף", product: "פפאיה", size: "תאילנדית ירוקה", packages: 34, quantity: 200, unitPrice: 5 });
   });
 });
 
@@ -303,45 +304,46 @@ describe("growers", () => {
 describe("Excel reports — reconciliation", async () => {
   const extraction = await extractSample("excel");
   const result = reconcile(extraction, TEENA_RIMON);
-  const bySupplierQty = (doc: string, qty: number) =>
-    result.groups.find((g) => g.supplierLines.some((l) => l.docNumber === doc && l.quantity === qty))!;
+  const byOwnQty = (doc: string, qty: number) =>
+    result.groups.find((g) => g.ownLines.some((l) => l.supplierRef === doc && l.quantity === qty))!;
+  const supplierQty = (g: MatchGroup) => g.supplierLines.map((l) => l.quantity);
 
-  it("finds the one delivery missing on Teena-Rimon's side", () => {
-    expect(result.supplierOnly.map((l) => [l.docNumber, l.description, l.quantity])).toEqual([["2146", "תפוז", 844]]);
-    expect(result.ownOnly).toEqual([]);
+  it("finds the one delivery missing on the supplier's side", () => {
+    expect(result.ownOnly.map((l) => [l.supplierRef, l.product, l.quantity])).toEqual([["2146", "תפוז", 844]]);
+    expect(result.supplierOnly).toEqual([]);
   });
 
   it("totals weight × price; no discount, and gaps don't offset", () => {
-    expect(result.totals).toMatchObject({ supplierNet: 144245.6, ownNet: 145834.8, ownDiscountPct: 0, diff: 1589.2 });
+    expect(result.totals).toMatchObject({ supplierNet: 145834.8, ownNet: 144245.6, ownDiscountPct: 0, diff: -1589.2 });
     expect(result.offset.applies).toBe(false);
   });
 
-  it("matches a sale to the weighings that add up to it, by grade", () => {
-    expect(bySupplierQty("909831", 1975).ownLines.map((l) => l.quantity)).toEqual([655, 651, 650]);
-    expect(bySupplierQty("909831", 1007).ownLines.map((l) => l.quantity)).toEqual([508, 481]);
-    expect(bySupplierQty("909864", 1829).ownLines.map((l) => l.quantity)).toEqual([614, 609, 609]);
-    expect(bySupplierQty("909864", 530).ownLines.map((l) => l.quantity)).toEqual([529]);
+  it("matches a Teena-Rimon row to the supplier's weighings that add up to it, by grade", () => {
+    expect(supplierQty(byOwnQty("909831", 1975))).toEqual([655, 651, 650]);
+    expect(supplierQty(byOwnQty("909831", 1007))).toEqual([508, 481]);
+    expect(supplierQty(byOwnQty("909864", 1829))).toEqual([614, 609, 609]);
+    expect(supplierQty(byOwnQty("909864", 530))).toEqual([529]);
   });
 
   it("groups same-product leftovers whose weights add up (n:m)", () => {
-    const g = bySupplierQty("94", 57);
-    expect(ids(g)).toBe("S10+S11→T50+T51");
+    const g = byOwnQty("94", 57);
+    expect(ids(g)).toBe("S50+S51→T10+T11");
     expect(g.flags).toEqual(["price"]);
   });
 
   it("pairs the evenly spread pitaya rows with one weighing", () => {
-    expect(bySupplierQty("99", 53).supplierLines).toHaveLength(4);
-    expect(bySupplierQty("92", 164).ownLines.map((l) => l.quantity)).toEqual([329]);
+    expect(byOwnQty("99", 53).ownLines).toHaveLength(4);
+    expect(supplierQty(byOwnQty("92", 164))).toEqual([329]);
   });
 
   it("pairs mistyped references by content, within the same grower", () => {
-    expect(bySupplierQty("520", 661).flags).toEqual(["doc_ref"]);
-    expect(bySupplierQty("909813", 458).ownLines[0].supplierRef).toBe("5587");
-    expect(bySupplierQty("909813", 458).flags).toContain("doc_ref");
+    expect(byOwnQty("520", 661).flags).toEqual(["doc_ref"]);
+    expect(byOwnQty("909813", 458).supplierLines[0].docNumber).toBe("5587");
+    expect(byOwnQty("909813", 458).flags).toContain("doc_ref");
   });
 
   it("says pieces, not weight, for pineapples", () => {
-    expect(bySupplierQty("87", 58).notes).toContain("יחידות: ספק 58, תאנה ורימון 53 (-5)");
+    expect(byOwnQty("87", 58).notes).toContain("יחידות: ספק 53, תאנה ורימון 58 (+5)");
   });
 
   it("leaves the PDF path untouched (no grower parties)", async () => {
@@ -354,9 +356,9 @@ describe("Excel reports — reconciliation (October pair)", async () => {
   const result = reconcile(await extractSample("excelOct"), TEENA_RIMON);
 
   it("matches rows of the same delivery note across a 3-day gap", () => {
-    const s = result.groups.filter((g) => g.supplierLines.some((l) => l.docNumber === "102190"));
-    expect(s.flatMap((g) => g.supplierLines.map((l) => l.id)).sort()).toEqual(["S69", "S70", "S71", "S72", "S73", "S74"]);
-    expect(s.flatMap((g) => g.ownLines.map((l) => l.id)).sort()).toEqual(["T25", "T26", "T27", "T28", "T29", "T30"]);
+    const s = result.groups.filter((g) => g.ownLines.some((l) => l.supplierRef === "102190"));
+    expect(s.flatMap((g) => g.supplierLines.map((l) => l.id)).sort()).toEqual(["S25", "S26", "S27", "S28", "S29", "S30"]);
+    expect(s.flatMap((g) => g.ownLines.map((l) => l.id)).sort()).toEqual(["T69", "T70", "T71", "T72", "T73", "T74"]);
   });
 
   it("pairs a grower whose name is contained in the other report's", () => {

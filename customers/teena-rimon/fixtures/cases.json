@@ -49,12 +49,12 @@
   },
   "excel": {
     "format": "excel",
-    "own": "sample_data/excel/תאנה רוימון.xlsx",
-    "supplier": "sample_data/excel/דוחות-תאנה ורימון-22.9.26 (1).xlsx"
+    "own": "sample_data/excel/דוחות-תאנה ורימון-22.9.26 (1).xlsx",
+    "supplier": "sample_data/excel/תאנה רוימון.xlsx"
   },
   "excelOct": {
     "format": "excel",
-    "own": "sample_data/excel/מארק מחירי תאנה ורימון.xlsx",
-    "supplier": "sample_data/excel/דוחות עם מחירים-תאנה ורימון עד ה-7.10.26.xlsx"
+    "own": "sample_data/excel/דוחות עם מחירים-תאנה ורימון עד ה-7.10.26.xlsx",
+    "supplier": "sample_data/excel/מארק מחירי תאנה ורימון.xlsx"
   }
 }
