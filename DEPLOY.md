@@ -1,6 +1,6 @@
 # Deploying LedgerMatch
 
-LedgerMatch is a static site. Invoice PDFs are parsed in the customer's browser; there is no server code anywhere in the deployment.
+LedgerMatch is a static site. Invoice PDFs are parsed in the customer's browser. The one piece of server code is the **AI fallback** (`backend/`, see below): a Lambda that reads a supplier invoice that no reader in the browser can read, for customers whose config sets `aiFallback`.
 
 ```
 Browser ──► CloudFront ──(viewer-request Function + KeyValueStore)──► private S3 bucket
@@ -57,6 +57,50 @@ scripts/token.sh list [teena-rimon]
 scripts/token.sh rotate <token>     # link leaked: new URL, old one stops working
 scripts/token.sh revoke <token>     # customer stopped paying: URL returns 404 within seconds
 ```
+
+## AI fallback (backend)
+
+```
+Browser ──(only after every reader in the browser refused)──► Lambda Function URL ──► Claude Sonnet 5.5 (Anthropic API)
+  GET  /profiles?vat=…   learned supplier layouts (labels only)        │
+  POST /parse            the supplier PDF + the rows read from it       └─► DynamoDB: layouts + usage counters; SNS: alert e-mails
+```
+
+The order of attempts in the browser (`core/src/extract.ts`): the supplier's own parser → the generic parsers → for a scan, OCR of the whole page and the generic parsers on it → the supplier's **learned layout** (fetched by VAT number, applied in the browser) → the AI. Every step refuses unless the lines add up to a printed total. The AI's answer is checked against the PDF (`core/src/ai/verify.ts`); a layout is kept only if it reads the same lines alone, so the supplier's next invoice is read in the browser without the AI.
+
+**One-time setup**
+
+1. Anthropic API key (Console → API keys; set a monthly spend limit and a spend notification there too). Store it in SSM, in the stack's region; it never goes into git or CDK:
+   ```bash
+   aws ssm put-parameter --region eu-central-1 --name /ledgermatch/anthropic-api-key --type SecureString --value 'sk-ant-…'
+   ```
+2. In `infra/cdk.json` set `alertEmail` (alert e-mails and the AWS budget). The other settings:
+
+   | context key | default | meaning |
+   | --- | --- | --- |
+   | `aiAlertThresholds` | `"25,50,100"` | monthly AI calls (all customers) that each send one e-mail |
+   | `aiAlertNewFormats` | `true` | also e-mail each time a supplier format is learned |
+   | `aiDailyLimit` | `30` | AI calls per customer per day; above it the app says to try tomorrow |
+   | `monthlyBudgetUsd` | `20` | AWS Budgets e-mail at 80% actual / 100% forecast of the whole account |
+
+3. `cd infra && npx cdk deploy`. SNS sends a confirmation e-mail to `alertEmail`: click it, or no alert arrives.
+4. Release each customer again (`scripts/release.sh <slug>`): the build picks up the `AiEndpoint` output as `VITE_AI_ENDPOINT`, and the new CSP allows exactly that URL. A customer's app uses it only if its config sets `aiFallback: true` — agree on it with the customer first (`docs/privacy-statement.md`).
+
+**Tracking**
+
+```bash
+scripts/formats.sh list                 # learned supplier formats: VAT, name, version, first customer, AI calls, lookups, last used
+scripts/formats.sh usage                # this month, all customers: AI calls, new formats, unverified readings, tokens, est. cost
+scripts/formats.sh usage teena-rimon 2026-10
+scripts/formats.sh show <vat>           # one learned layout
+scripts/formats.sh delete <vat>         # forget it: the next invoice goes to the AI and is learned again
+```
+
+PostHog: `reconciliation_completed.supplier_source` is `dedicated`, `generic`, `ocr_generic`, `profile` or `ai` — e.g. a weekly insight of `ai` events is "invoices that needed the AI". A supplier that keeps coming back as `ai` (its layout cannot be learned) is a candidate for a generic-parser fix or a parser of its own; `formats.sh show` and the Lambda's log (counts only) help.
+
+**Cost** at under 200 supplier invoices a month: the Lambda, DynamoDB, SNS and logs stay within a few cents. The AI runs only for a supplier's first invoice, a scan nothing else reads, or after a layout change — roughly 5–20 calls a month at about $0.05–0.08 each (Sonnet 5.5, $2 / $10 per million tokens): **about $1–3 a month**. The daily cap per customer, the alert thresholds, the AWS budget and the Anthropic spend limit bound the worst case.
+
+**Local testing.** `npm run backend:dev` runs the same handler on `http://localhost:43124`, with layouts and counters in `backend/.dev-store.json` and alerts printed to the terminal (needs `ANTHROPIC_API_KEY` or `ant auth login`; it calls the real API). Then `VITE_AI_ENDPOINT=http://localhost:43124 CUSTOMER=ai-test npm run dev`: the `ai-test` config (never released; `release.sh` refuses it) has no supplier parsers and the generic parsers off, so every invoice goes to the learned layout or the AI. Upload a supplier invoice twice: the first time the log shows an AI call and a new format, the second time only a profile lookup and no AI call. `AI_ALERT_THRESHOLDS=2 npm run backend:dev` shows the alert after the second AI call. The opt-in live test (`RUN_AI_TESTS=1 npm test --prefix backend -- ai.live`, about $1) sends every sample to the AI with all local readers skipped and compares the answers with the dedicated parsers.
 
 ## After every deploy or release: check it
 

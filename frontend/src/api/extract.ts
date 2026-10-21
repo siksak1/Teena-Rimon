@@ -14,22 +14,26 @@ export class ExtractError extends Error {
 }
 
 /**
- * Parse both PDFs in this browser tab — invoice files never leave it. The
- * parsers (and pdf.js, ~1.6 MB) are loaded on demand to keep the first load
- * small; OCR (~5 MB) only when the supplier invoice is a scan.
- * `onScanProgress` reports pages read from a scanned invoice.
+ * Parse both PDFs in this browser tab. The parsers (and pdf.js, ~1.6 MB) are
+ * loaded on demand to keep the first load small; OCR (~5 MB) only when the
+ * supplier invoice is a scan. `onScanProgress` reports pages read by OCR.
+ * Only when every reader here refuses the supplier invoice, and the
+ * customer's config turns the AI on, is it sent to the backend
+ * (`onAiStart` says so first).
  */
 export async function extractInvoices(
   ownFile: File,
   supplierFile: File,
   onScanProgress?: (done: number, total: number) => void,
+  onAiStart?: () => void,
 ): Promise<ExtractionResult> {
-  const [{ extractInvoices: extract }, { GlobalWorkerOptions }, { default: pdfWorker }, { browserScanSupport }] =
+  const [{ extractInvoices: extract }, { GlobalWorkerOptions }, { default: pdfWorker }, { browserScanSupport }, { browserRemoteSupport }] =
     await Promise.all([
       import("@core/extract.js"),
       import("pdfjs-dist"),
       import("pdfjs-dist/build/pdf.worker.min.mjs?worker&url"),
       import("./ocr"),
+      import("./remote"),
     ]);
   // pdf.js parses in its own worker, served from the app's own files.
   GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -43,6 +47,7 @@ export async function extractInvoices(
       },
       customer,
       browserScanSupport(onScanProgress),
+      browserRemoteSupport(customer.aiFallback === true, onAiStart),
     );
   } catch (err) {
     throw asExtractError(err);

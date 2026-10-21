@@ -8,13 +8,15 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const TOKEN = "e2e-test-token-0123456789";
+/** The fake AI backend the e2e build is pointed at (npm run e2e); the tests answer it with page.route. */
+export const AI_ENDPOINT = "https://ai.e2e.test/";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 const headers = JSON.parse(readFileSync(new URL("../../infra/security-headers.json", import.meta.url), "utf8"));
 const port = Number(process.argv[2] ?? 43130);
 
 const SECURITY = {
-  "Content-Security-Policy": headers.contentSecurityPolicy.join("; "),
+  "Content-Security-Policy": headers.contentSecurityPolicy.join("; ").replace("__AI_ENDPOINT__", AI_ENDPOINT),
   "X-Robots-Tag": headers.robots,
   "Referrer-Policy": headers.referrerPolicy,
   "Permissions-Policy": headers.permissionsPolicy,

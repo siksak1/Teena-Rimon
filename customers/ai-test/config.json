@@ -1,0 +1,40 @@
+{
+  "slug": "ai-test",
+  "configVersion": 1,
+  "displayName": "תאנה ורימון (בדיקת AI)",
+  "shortName": "ת\"ר",
+  "ownDocument": {
+    "format": "agroline-draft",
+    "label": "חשבונית טיוטה (AGROLINE)"
+  },
+  "suppliers": [
+    "levi"
+  ],
+  "genericFallback": false,
+  "aiFallback": true,
+  "referenceRules": [
+    "docNumber",
+    "bookRef"
+  ],
+  "tolerances": {
+    "rejectRelativeDiff": 0.05,
+    "maxGroupSize": 4,
+    "sumToleranceKg": 1,
+    "dateWindowDays": 2,
+    "offsetToleranceNis": 1,
+    "documentToleranceNis": 1,
+    "arithmeticTolerance": 0.05
+  },
+  "unprintedDiscounts": {
+    "carmel": 0.12
+  },
+  "offsetting": "invoice-wide",
+  "excel": {
+    "tolerances": {
+      "sumToleranceRel": 0.02
+    }
+  },
+  "analytics": {
+    "sendDiscrepancyAmount": false
+  }
+}

@@ -75,6 +75,13 @@ export const customerConfigSchema = z.strictObject({
    * unless set to false.
    */
   genericFallback: z.boolean().optional(),
+  /**
+   * When no reader in the browser can read a supplier invoice: look up the
+   * supplier's learned layout on the backend by VAT number, and failing
+   * that send the invoice to the AI (which also learns the layout for next
+   * time). Off unless true; the customer's agreement must allow it.
+   */
+  aiFallback: z.boolean().optional(),
   /** Supplier fields the clerk may have typed into the own document's reference ("אסמכתא"). */
   referenceRules: z.array(referenceRule).min(1),
   tolerances,

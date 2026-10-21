@@ -1,8 +1,9 @@
 import { ExtractionError } from "../errors.js";
 import type { SupplierInvoice, SupplierLine } from "../model.js";
-import { wrappedText, type Cell, type PdfDocument, type Row } from "../pdf/layout.js";
+import { fuzzyEquals, fuzzyIncludes, wrappedText, type Cell, type PdfDocument, type Row } from "../pdf/layout.js";
 import { hasHebrew, parseDate, parseNumber, round2 } from "../pdf/text.js";
 import { ADJUSTMENT_ROW, headerField, PALLET_ROW, SUMMARY_ROW, TOTAL_LABEL, type HeaderField } from "./genericHeaders.js";
+import type { SupplierProfile } from "./profile.js";
 import type { TextSupplierParser } from "./types.js";
 
 /**
@@ -38,6 +39,41 @@ export const genericTableParser: TextSupplierParser = {
   parse: parseGeneric,
 };
 
+/**
+ * Read an invoice of a supplier whose layout was learned (`profile.ts`): the
+ * same parser, with the profile's labels in place of the shared guesses. The
+ * lines must still add up to the printed total, so a profile that no longer
+ * fits the invoice (the supplier changed its layout) makes it refuse.
+ */
+export function parseWithProfile(doc: PdfDocument, profile: SupplierProfile): SupplierInvoice {
+  if (!doc.text.replace(/\D/g, " ").split(/\s+/).includes(profile.vatId) && !digitsOf(doc).includes(profile.vatId)) {
+    throw refuse(`מספר העוסק ${profile.vatId} של ${profile.name} אינו מופיע בחשבונית`);
+  }
+  const invoice = parseGeneric({ ...doc, profile } as ProfiledDocument);
+  invoice.generic = "profile";
+  invoice.supplierId = `profile-${profile.vatId}`;
+  invoice.supplierName = profile.name;
+  invoice.vatId = profile.vatId;
+  invoice.warnings = invoice.warnings.map((w) => (w === GENERIC_WARNING ? profileWarning(profile) : w));
+  return invoice;
+}
+
+/** A document read with a supplier's learned layout. */
+type ProfiledDocument = PdfDocument & { profile?: SupplierProfile };
+const profileOf = (doc: PdfDocument) => (doc as ProfiledDocument).profile;
+
+/** All digits of the document run together per row: OCR may split a VAT number. */
+function digitsOf(doc: PdfDocument): string {
+  return doc.rows.map((r) => r.text.replace(/\D/g, "")).join(" ");
+}
+
+const GENERIC_WARNING =
+  "החשבונית נקראה בפורמט כללי (ללא קורא ייעודי לספק זה). הסכומים אומתו מול הסה\"כ המודפס, אך מומלץ לבדוק את התאריכים, מספרי התעודות ושמות המוצרים";
+
+function profileWarning(profile: SupplierProfile): string {
+  return `החשבונית נקראה לפי מבנה שנלמד עבור ${profile.name} (גרסה ${profile.version}). הסכומים אומתו מול הסה"כ המודפס`;
+}
+
 /** Rows whose arithmetic fails by more than this are not item rows. */
 const ABS_TOLERANCE = 0.05;
 const REL_TOLERANCE = 0.0001;
@@ -59,27 +95,32 @@ type HeaderColumn = { x: number; xMin: number; xMax: number; label: string; fiel
 
 function parseGeneric(doc: PdfDocument): SupplierInvoice {
   const warnings: string[] = [];
-  const { lines, isItem, pallets, gross, footerDiscount, invoiceDate } = readTable(doc);
-  if (lines.length === 0) throw refuse("לא נמצאו שורות פריטים");
-
+  let table = readTable(doc);
+  if (table.lines.length === 0) throw refuse("לא נמצאו שורות פריטים");
+  let match = matchTable(doc, table);
+  // Text read by OCR: one misread row may be restored when a printed total proves it.
+  let restored: ItemRow | null = null;
+  if (match == null && doc.repairedByOcr) {
+    restored = restoreMisreadRow(doc, table);
+    if (restored) {
+      table = readTable(doc, [restored]);
+      match = matchTable(doc, table);
+    }
+  }
+  const { lines, isItem, pallets, invoiceDate } = table;
   const sum = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
-  const match = matchPrintedTotal(doc, isItem, [
-    { value: sum, items: sum },
-    { value: round2(sum + pallets), items: sum },
-    // Gross lines and a footer discount: the net total is printed with per-line rounding drift.
-    ...(footerDiscount ? [{ value: round2(gross), items: printedNear(doc, isItem, sum) ?? sum }] : []),
-  ]);
   if (match == null) {
     throw refuse(`סכום השורות (${sum}) אינו מתאים לאף סה"כ המודפס בחשבונית${totalsHint(doc, isItem, sum, pallets)}`);
+  }
+  if (restored) {
+    warnings.push(`סכום שורה אחת נקרא ב-OCR באופן שגוי ושוחזר לפי הסה"כ המודפס (${restored.math.total.value}); מומלץ לבדוק אותה`);
   }
   const printedItemsTotal = match.items;
   if (match.adjustment != null) {
     warnings.push(`הפרש של ${match.gap} ש"ח בין סכום השורות לסה"כ המודפס, המוסבר בעיגול/הנחה כללית של ${match.adjustment} ש"ח בחשבונית`);
   }
 
-  warnings.push(
-    "החשבונית נקראה בפורמט כללי (ללא קורא ייעודי לספק זה). הסכומים אומתו מול הסה\"כ המודפס, אך מומלץ לבדוק את התאריכים, מספרי התעודות ושמות המוצרים",
-  );
+  warnings.push(GENERIC_WARNING);
   if (lines.some((l) => !l.date)) warnings.push("בחלק מהשורות לא נמצא תאריך");
 
   return {
@@ -95,10 +136,59 @@ function parseGeneric(doc: PdfDocument): SupplierInvoice {
   };
 }
 
+type Table = ReturnType<typeof readTable>;
+
+/** The printed total a table's lines add up to (with or without pallets), or null. */
+function matchTable(doc: PdfDocument, table: Table): TotalMatch | null {
+  const { lines, isItem, pallets, gross, footerDiscount } = table;
+  const sum = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
+  return matchPrintedTotal(doc, isItem, [
+    { value: sum, items: sum },
+    { value: round2(sum + pallets), items: sum },
+    // Gross lines and a footer discount: the net total is printed with per-line rounding drift.
+    ...(footerDiscount ? [{ value: round2(gross), items: printedNear(doc, isItem, sum) ?? sum }] : []),
+  ]);
+}
+
+/**
+ * A row in the item table's columns whose total OCR misread: its quantity ×
+ * price is exactly what the lines lack to reach a printed total. Restored only
+ * when one row (and one reading of it) fits, so the printed total proves the
+ * correction; otherwise the invoice is refused as before.
+ */
+function restoreMisreadRow(doc: PdfDocument, table: Table): ItemRow | null {
+  const { lines, isItem, columns, discounts } = table;
+  if (!columns || table.footerDiscount) return null;
+  const sum = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
+  const gaps = printedAmounts(doc, isItem).map((p) => round2(Math.abs(p) - sum)).filter((g) => g > 0);
+  const near = (x: number, column: number) => Math.abs(x - column) <= COLUMN_TOLERANCE;
+  const pages = new Set(lines.map((l) => l.page));
+  const fits: ItemRow[] = [];
+  for (const row of doc.rows) {
+    if (isItem.has(row) || !pages.has(row.page) || SUMMARY_ROW.test(row.text)) continue;
+    const nums = amounts(row, profileOf(doc));
+    const totalCell = nums.find((n) => near(n.cell.x, columns.totalX))?.cell;
+    if (!totalCell) continue;
+    for (const price of nums.filter((n) => near(n.cell.x, columns.priceX) && n.value > 0)) {
+      for (const quantity of nums.filter((n) => n.cell !== price.cell && columns.quantityXs.some((x) => near(n.cell.x, x)) && n.value > 0)) {
+        for (const discount of [0, ...discounts]) {
+          const value = round2(quantity.value * price.value * (1 - discount));
+          if (gaps.some((g) => Math.abs(g - value) <= TOTAL_TOLERANCE)) {
+            fits.push({ row, math: { quantity, price, total: { cell: totalCell, value }, discount } });
+          }
+        }
+      }
+    }
+  }
+  return fits.length === 1 ? fits[0] : null;
+}
+
 /** The item lines as read, before they are checked against the printed totals. Exported for the tests. */
-export function readTable(doc: PdfDocument) {
+export function readTable(doc: PdfDocument, recovered: ItemRow[] = []) {
   const discounts = documentDiscounts(doc);
-  const { rows: itemRows } = findItemRows(doc, discounts);
+  const found = findItemRows(doc, discounts);
+  const itemRows = [...found.rows, ...recovered];
+  const restoredRows = new Set(recovered.map((r) => r.row));
 
   const invoiceDate = findInvoiceDate(doc);
   const isItem = new Map(itemRows.map((r) => [r.row, r]));
@@ -173,13 +263,14 @@ export function readTable(doc: PdfDocument) {
         unitPrice: item.math.price.value,
         discountPct: round4(item.math.discount),
         lineTotal: total,
+        ...(restoredRows.has(row) ? { ocrUncertain: ["lineTotal" as const] } : {}),
       });
     }
     carried = lines.at(-1) ?? null;
   }
   // Line totals printed before a discount that the footer applies once.
   const footerDiscount = applyFooterDiscount(doc, lines, discounts);
-  return { lines, isItem, pallets, gross, footerDiscount, invoiceDate };
+  return { lines, isItem, pallets, gross, footerDiscount, invoiceDate, columns: found.columns, discounts };
 }
 
 function refuse(reason: string): ExtractionError {
@@ -202,21 +293,27 @@ const QUOTES = /["'״׳]/g;
  * mark can be moved away from it in right-to-left text ("'2.00 יח",
  * "ש"ח 3.000").
  */
-export function readAmount(text: string): number | null {
+export function readAmount(text: string, extraUnits: string[] = []): number | null {
   const match = text.trim().match(NUMBER_WITH_UNIT);
   if (!match) return null;
   const [, before, number, after] = match;
-  if (!UNITS.has((before + after).replace(QUOTES, "").replace(/\s+/g, ""))) return null;
+  const unit = (before + after).replace(QUOTES, "").replace(/\s+/g, "");
+  if (!UNITS.has(unit) && !extraUnits.some((u) => u.replace(QUOTES, "").replace(/\s+/g, "") === unit)) return null;
   // Long whole numbers are document, pallet or item codes.
   if (/^\d{6,}$/.test(number.trim())) return null;
   return parseNumber(number);
 }
 
-function amounts(row: Row): Amount[] {
-  return row.cells.flatMap((cell) => {
-    const value = readAmount(cell.text);
-    return value == null ? [] : [{ cell, value }];
-  });
+/** A cell's amounts: its text, and any other reading OCR made of it (each cell counts once per reading). */
+function amounts(row: Row, profile?: SupplierProfile): Amount[] {
+  const units = profile?.amountUnits;
+  return row.cells.flatMap((cell) =>
+    [cell.text, ...(cell.alternatives ?? [])].flatMap((text, i, all) => {
+      const value = readAmount(text, units);
+      if (value == null || all.slice(0, i).some((t) => readAmount(t, units) === value)) return [];
+      return [{ cell, value }];
+    }),
+  );
 }
 
 function percentages(text: string): number[] {
@@ -233,26 +330,29 @@ function documentDiscounts(doc: PdfDocument): number[] {
 const close = (a: number, b: number) => Math.abs(a - b) <= ABS_TOLERANCE + REL_TOLERANCE * Math.abs(b);
 
 /** Every reading of a row's amounts that multiplies out (quantity right of price, price right of total). */
-function rowReadings(row: Row, docDiscounts: number[]): Arithmetic[] {
-  const nums = amounts(row).sort((a, b) => a.cell.x - b.cell.x);
+function rowReadings(row: Row, docDiscounts: number[], profile?: SupplierProfile): Arithmetic[] {
+  const nums = amounts(row, profile).sort((a, b) => a.cell.x - b.cell.x);
   if (nums.length < 3) return [];
-  const rowDiscounts = percentages(row.text);
+  const source = profile?.discountSource;
+  const rowDiscounts = source == null || source === "row" ? percentages(row.text) : [];
+  if (source != null && source !== "footer") docDiscounts = [];
   const readings: Arithmetic[] = [];
   for (let t = 0; t < nums.length; t++) {
     const total = nums[t];
     if (total.value < 0) continue;
     for (let p = t + 1; p < nums.length; p++) {
       const price = nums[p];
+      if (price.cell === total.cell) continue;
       // A free line (price and total 0) is kept: a delivery charged nothing is still a delivery.
       if (price.value < 0 || (price.value === 0) !== (total.value === 0)) continue;
       // A second, discounted price column between the price and the total.
-      const implied = nums
-        .slice(t + 1, p)
+      const implied = (source != null && source !== "netPriceColumn" ? [] : nums.slice(t + 1, p))
+        .filter((n) => n.cell !== price.cell && n.cell !== total.cell)
         .map((n) => 1 - n.value / price.value)
         .filter((d) => d > 0 && d <= MAX_DISCOUNT);
       for (let q = p + 1; q < nums.length; q++) {
         const quantity = nums[q];
-        if (quantity.value <= 0) continue;
+        if (quantity.value <= 0 || quantity.cell === price.cell || quantity.cell === total.cell) continue;
         for (const discount of [0, ...rowDiscounts, ...docDiscounts, ...implied]) {
           if (close(quantity.value * price.value * (1 - discount), total.value)) {
             readings.push({ quantity, price, total, discount });
@@ -292,13 +392,22 @@ type TableColumns = { totalX: number; priceX: number; quantityXs: number[] };
  * number or code that happens to multiply out is not taken for a quantity.
  * Free lines (0 × price) only count inside those columns.
  */
-function findItemRows(doc: PdfDocument, docDiscounts: number[]): { rows: ItemRow[] } {
+function findItemRows(doc: PdfDocument, docDiscounts: number[]): { rows: ItemRow[]; columns: TableColumns | null } {
+  const profile = profileOf(doc);
+  const skip = (profile?.skipRows ?? []).map((p) => new RegExp(p));
   const candidates = doc.rows
-    .filter((row) => !SUMMARY_ROW.test(row.text))
-    .map((row) => ({ row, readings: rowReadings(row, docDiscounts) }))
+    .filter((row) => !SUMMARY_ROW.test(row.text) && !skip.some((re) => re.test(row.text)))
+    .map((row) => ({ row, readings: rowReadings(row, docDiscounts, profile) }))
     .filter((c) => c.readings.length > 0);
-  const first = candidates.flatMap((c) => bestReading(c.readings.filter((r) => r.total.value > 0)) ?? []);
-  if (first.length === 0) return { rows: [] };
+  // With a learned profile, the table's columns come from readings whose amounts sit under its headers.
+  const headers = profile ? profileHeaders(doc, profile) : null;
+  if (headers?.size === 0) return { rows: [], columns: null };
+  const fitsHeaders = (row: Row, r: Arithmetic) =>
+    !headers || underHeaders(r, headers.get(row.page) ?? headers.values().next().value!);
+  const first = candidates.flatMap(
+    (c) => bestReading(c.readings.filter((r) => r.total.value > 0 && fitsHeaders(c.row, r))) ?? [],
+  );
+  if (first.length === 0) return { rows: [], columns: null };
   const columns: TableColumns = {
     totalX: modalX(first.map((r) => r.total.cell.x)),
     priceX: modalX(first.map((r) => r.price.cell.x)),
@@ -313,7 +422,67 @@ function findItemRows(doc: PdfDocument, docDiscounts: number[]): { rows: ItemRow
       const math = bestReading(readings, columns);
       return math ? [{ row, math }] : [];
     }),
+    columns,
   };
+}
+
+/** A header block the profile's labels were found in: every column's label, and the three amount columns. */
+type ProfileHeader = { labels: Cell[]; total: Cell; price: Cell; quantity: Cell };
+
+/**
+ * Per page, the header block that prints the profile's three amount labels (a
+ * header may stack over up to three lines: "מחיר" over "ליחידה"). Pages
+ * without one continue the table of the page before.
+ */
+function profileHeaders(doc: PdfDocument, profile: SupplierProfile): Map<number, ProfileHeader> {
+  const { quantity, unitPrice, total } = profile.amountColumns;
+  const found = new Map<number, ProfileHeader>();
+  for (const [i, row] of doc.rows.entries()) {
+    if (found.has(row.page)) continue;
+    const stack = [row];
+    for (const next of doc.rows.slice(i + 1, i + 3)) {
+      // Item rows (with amounts and dates) are not part of the header.
+      if (next.page !== row.page || stack.at(-1)!.y - next.y > 16 || /\d{2}/.test(next.text)) break;
+      stack.push(next);
+    }
+    const labels = stackedLabels(stack);
+    const find = (label: string) =>
+      labels.find((c) => c.text === label || fuzzyEquals(c.text, label)) ??
+      labels.find((c) => label.length >= 4 && c.text.includes(label));
+    const t = find(total);
+    const p = find(unitPrice);
+    const q = find(quantity);
+    if (t && p && q && new Set([t, p, q]).size === 3) found.set(row.page, { labels, total: t, price: p, quantity: q });
+  }
+  return found;
+}
+
+/** Each amount of the reading is nearest the header of the column the profile says it is in. */
+function underHeaders(r: Arithmetic, header: ProfileHeader): boolean {
+  const distance = (cell: Cell, label: Cell) =>
+    cell.xMax < label.xMin ? label.xMin - cell.xMax : cell.xMin > label.xMax ? cell.xMin - label.xMax : 0;
+  const nearest = (cell: Cell) =>
+    header.labels.reduce((best, label) => (distance(cell, label) < distance(cell, best) ? label : best));
+  return nearest(r.total.cell) === header.total && nearest(r.price.cell) === header.price && nearest(r.quantity.cell) === header.quantity;
+}
+
+/** Header cells printed one above the other, joined top to bottom. */
+function stackedLabels(rows: Row[]): Cell[] {
+  const merged: Cell[] = [];
+  for (const row of rows) {
+    for (const cell of row.cells) {
+      const above = merged.find((m) => cell.xMin <= m.xMax && cell.xMax >= m.xMin);
+      if (above) {
+        above.text = `${above.text} ${cell.text}`;
+        above.xMin = Math.min(above.xMin, cell.xMin);
+        above.xMax = Math.max(above.xMax, cell.xMax);
+        above.x = (above.xMin + above.xMax) / 2;
+      } else {
+        merged.push({ ...cell });
+      }
+    }
+  }
+  return merged;
 }
 
 /** The x shared (within the column tolerance) by most values. */
@@ -350,13 +519,14 @@ function frequentXs(xs: number[], minCount: number): number[] {
  * digits (group rows such as "תאריך תעודה: 16/08/26") are not headers.
  */
 function headerColumns(doc: PdfDocument, firstItem: Row): HeaderColumn[] {
+  const profile = profileOf(doc);
   const above = doc.rows.filter(
     (r) =>
       r.page === firstItem.page &&
       r.y > firstItem.y &&
       r.y - firstItem.y <= HEADER_REACH &&
       !/\d{2}/.test(r.text) &&
-      r.cells.some((c) => headerField(c.text) != null),
+      r.cells.some((c) => fieldOf(c.text, profile) != null),
   );
   // The header block is the run of such rows nearest the item rows.
   const block: Row[] = [];
@@ -379,8 +549,18 @@ function headerColumns(doc: PdfDocument, firstItem: Row): HeaderColumn[] {
       }
     }
   }
-  for (const column of columns) column.field = headerField(column.label) ?? firstField(column.label);
+  for (const column of columns) column.field = fieldOf(column.label, profile) ?? firstField(column.label);
   return columns;
+}
+
+/** A header's field: as the supplier's learned profile names it, else from the shared dictionary. */
+function fieldOf(label: string, profile?: SupplierProfile): HeaderField | null {
+  if (profile) {
+    for (const [printed, field] of Object.entries(profile.headers)) {
+      if (label === printed || fuzzyEquals(label, printed)) return field;
+    }
+  }
+  return headerField(label);
 }
 
 /** A joined label no pattern knows: try its parts ("אסמכתא" + "נוספת"). */
@@ -395,7 +575,7 @@ function firstField(label: string): HeaderField | null {
 /** The top of the page's header block, so group rows above it (titles) are ignored. */
 function headerTop(doc: PdfDocument, page: number): number {
   const rows = doc.rows.filter(
-    (r) => r.page === page && r.cells.filter((c) => headerField(c.text) != null).length >= 2 && !/\d{2}/.test(r.text),
+    (r) => r.page === page && r.cells.filter((c) => fieldOf(c.text, profileOf(doc)) != null).length >= 2 && !/\d{2}/.test(r.text),
   );
   return rows.length > 0 ? Math.max(...rows.map((r) => r.y)) + 1 : Infinity;
 }
@@ -577,6 +757,12 @@ function updateContext(context: { date: string | null; doc: string | null; bookR
 }
 
 function findInvoiceDate(doc: PdfDocument): string | null {
+  const label = profileOf(doc)?.dateLabel;
+  if (label) {
+    const row = doc.rows.find((r) => fuzzyIncludes(r, label) && /\d{1,2}\/\d{1,2}\/\d{2}/.test(r.text));
+    const date = row?.text.match(/\b(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))\b/)?.[1];
+    if (date) return parseDate(date);
+  }
   const labelled = doc.text.match(/תאריך(?: חשבונית)?\s*:?\s*(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))/)?.[1];
   if (labelled) return parseDate(labelled);
   const any = doc.rows.slice(0, 15).map((r) => r.text.match(/\b\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})\b/)?.[0]).find(Boolean);
@@ -584,6 +770,12 @@ function findInvoiceDate(doc: PdfDocument): string | null {
 }
 
 function findInvoiceNumber(doc: PdfDocument): string {
+  const label = profileOf(doc)?.invoiceNumberLabel;
+  if (label) {
+    const row = doc.rows.find((r) => fuzzyIncludes(r, label));
+    const token = row?.cells.map((c) => c.text.match(/\b([A-Z]{0,3}\d{3,}[A-Z0-9]*)\b/)?.[1]).find((t) => t && !/^\d{9}$/.test(t));
+    if (token) return token;
+  }
   for (const row of doc.rows.slice(0, 25)) {
     if (!row.text.includes("חשבונית")) continue;
     const token = row.cells.map((c) => c.text.match(/\b([A-Z]{0,3}\d{4,}[A-Z0-9]*)\b/)?.[1]).find((t) => t && !/^\d{9}$/.test(t));
@@ -598,8 +790,9 @@ function findInvoiceNumber(doc: PdfDocument): string {
 
 /**
  * When every line multiplied out without a discount but the footer prints
- * one, and a printed total equals the lines less that discount, the line
- * totals were gross: restate them net, as the other parsers do.
+ * one, and a printed total equals the lines less that discount (or the
+ * discount row prints that amount), the line totals were gross: restate them
+ * net, as the other parsers do.
  */
 function applyFooterDiscount(doc: PdfDocument, lines: SupplierLine[], discounts: number[]): number | null {
   if (lines.some((l) => l.discountPct !== 0)) return null;
@@ -607,7 +800,10 @@ function applyFooterDiscount(doc: PdfDocument, lines: SupplierLine[], discounts:
   const printed = printedAmounts(doc, new Map());
   for (const d of discounts) {
     const net = round2(sum * (1 - d));
-    if (!printed.some((p) => Math.abs(p - net) <= 1)) continue;
+    // The net total, or the discount amount beside its rate ("הנחה: 12.00%  11,177.96").
+    const off = round2(sum * d);
+    const discountRow = doc.rows.some((r) => r.text.includes("הנחה") && amounts(r, profileOf(doc)).some((a) => Math.abs(a.value - off) <= TOTAL_TOLERANCE));
+    if (!printed.some((p) => Math.abs(p - net) <= 1) && !discountRow) continue;
     for (const line of lines) {
       line.discountPct = d;
       line.lineTotal = round2(line.lineTotal * (1 - d));
@@ -619,8 +815,9 @@ function applyFooterDiscount(doc: PdfDocument, lines: SupplierLine[], discounts:
 
 /** Amounts on rows that look like totals ("סה"כ כללי", "מחיר כולל", "סה"כ נטו סחורה"…). */
 function printedAmounts(doc: PdfDocument, items: Map<Row, ItemRow>): number[] {
+  const label = profileOf(doc)?.totalLabel;
   return doc.rows
-    .filter((r) => !items.has(r) && TOTAL_LABEL.test(r.text))
+    .filter((r) => !items.has(r) && (label ? fuzzyIncludes(r, label) : TOTAL_LABEL.test(r.text)))
     .flatMap((r) => r.cells.filter((c) => /\d\.\d{2}\b/.test(c.text) && !c.text.includes("%")))
     .map((c) => parseNumber(c.text))
     .filter((v): v is number => v != null);

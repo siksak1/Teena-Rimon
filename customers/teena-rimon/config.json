@@ -1,11 +1,12 @@
 {
   "slug": "teena-rimon",
-  "configVersion": 5,
+  "configVersion": 6,
   "displayName": "תאנה ורימון",
   "shortName": "ת\"ר",
   "ownDocument": { "format": "agroline-draft", "label": "חשבונית טיוטה (AGROLINE)" },
   "suppliers": ["granot", "shivuk-hahof", "d-hai", "menashri", "haklaim", "galil", "carmel", "hasor", "har-kor", "levi"],
   "genericFallback": true,
+  "aiFallback": true,
   "referenceRules": ["docNumber", "bookRef"],
   "tolerances": {
     "rejectRelativeDiff": 0.05,

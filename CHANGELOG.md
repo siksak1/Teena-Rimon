@@ -4,6 +4,13 @@ Versions follow semver. The version shown in the app footer comes from the root 
 
 ## Unreleased
 
+- **AI fallback for supplier formats nothing else reads** (config `aiFallback`; on for Teena-Rimon, configVersion 6). Order of attempts: own parser → generic parsers → for an unknown scan, whole-page OCR then the generic parsers → the supplier's learned layout (fetched by VAT number, applied in the browser) → Claude Sonnet 5.5 through the new `backend/` Lambda. The AI's answer is checked against the PDF and rows that fail are marked "⚠ לבדיקה"; the layout it describes is kept only if the table parser reads the same lines with it, so the supplier's next invoice is read in the browser. Results show "מבנה נלמד" / "נקרא בעזרת AI".
+- Unknown scans: whole-page OCR (`core/src/pdf/ocrDocument.ts`) feeds the generic parsers. Har-Kor's scan, without its parser, reads amount for amount like its parser. The table parser also accepts a footer discount proven by its printed amount, and on OCR text restores one misread row when a printed total proves it.
+- Backend: DynamoDB table of learned layouts and usage counters, a per-customer daily cap (30), SNS e-mails when the month's AI calls reach each threshold (25, 50, 100) and when a new supplier format is learned, an AWS budget alarm. `scripts/formats.sh` lists learned formats and AI usage and cost.
+- The CSP's `connect-src` adds the backend's Function URL. Deploy the stack (`DEPLOY.md` → AI fallback: the API key goes into SSM first) before releasing this version.
+- Analytics: `supplier_source`; error codes `AI_UNAVAILABLE`, `AI_RATE_LIMITED`, `AI_UNREADABLE`. The privacy statement and the IT guide describe when a supplier invoice is sent out.
+- Dev-only customer config `ai-test` (no parsers, generic off: everything goes to the layout or the AI); `release.sh` refuses it.
+
 - Rows that share a delivery note (אסמכתא) are matched whatever their dates; the `dateWindowDays` limit now applies only to rows with different references (first: Meshek Meltzer's 102190, 3 days apart in the two reports).
 - Excel mode: a grower whose name is contained in the other report's name, by whole words, is paired as the same grower ("ערדום" ↔ "מארק ערדום").
 - Excel mode reads reports whatever their column names and order: each column's role (date, grower, item, document, packages, weight, price, variety) is found from its values, and the delivery-note column is the one whose values also appear in the other report. Header names only break near-ties; an uncertain choice is shown as a warning, and the results page lists the columns used. Config: `excel.supplierFormat` / `excel.ownFormat` are removed; configVersion 5.

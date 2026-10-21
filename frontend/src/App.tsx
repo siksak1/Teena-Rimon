@@ -20,6 +20,8 @@ const supplierNote =
   customer.genericFallback === false
     ? `ספקים נתמכים: ${supplierNames}`
     : `ספקים עם קורא ייעודי: ${supplierNames} · חשבוניות של ספקים אחרים נקראות לפי מבנה הטבלה`;
+/** The AI fallback is on for this customer (and built in). */
+const aiOn = customer.aiFallback === true && Boolean(import.meta.env.VITE_AI_ENDPOINT);
 
 export default function App() {
   const [mode, setMode] = useState<Mode>("pdf");
@@ -29,6 +31,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   /** Pages read so far while OCR runs (a scanned invoice, or a PDF whose Hebrew text is missing). */
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
+  /** The supplier invoice was sent to the AI (no reader in the browser could read it). */
+  const [readingWithAi, setReadingWithAi] = useState(false);
   const [result, setResult] = useState<{
     extraction: ExtractionResult;
     reconciliation: ReconciliationResult;
@@ -50,15 +54,23 @@ export default function App() {
     setPhase("extracting");
     setError(null);
     setScanProgress(null);
+    setReadingWithAi(false);
 
     try {
       const started = performance.now();
       const extraction =
         mode === "excel"
           ? await extractExcelReports(ownFile, supplierFile)
-          : await extractInvoices(ownFile, supplierFile, (done, total) => {
-              if (!controller.signal.aborted) setScanProgress({ done, total });
-            });
+          : await extractInvoices(
+              ownFile,
+              supplierFile,
+              (done, total) => {
+                if (!controller.signal.aborted) setScanProgress({ done, total });
+              },
+              () => {
+                if (!controller.signal.aborted) setReadingWithAi(true);
+              },
+            );
       // Parsing can't be cancelled; ignore results that arrive after a reset or a newer run.
       if (controller.signal.aborted) return;
       const parsed = performance.now();
@@ -120,7 +132,7 @@ export default function App() {
           </div>
         </div>
         <p className="brand-bar__note">
-          הקבצים נקראים בדפדפן בלבד · {supplierNote}
+          {aiOn ? "הקבצים נקראים בדפדפן" : "הקבצים נקראים בדפדפן בלבד"} · {supplierNote}
         </p>
       </header>
 
@@ -197,9 +209,11 @@ export default function App() {
           </button>
           {phase === "extracting" && (
             <span className="actions__status" role="status">
-              {scanProgress
-                ? `קורא בזיהוי תווים (OCR)… עמוד ${Math.min(scanProgress.done + 1, scanProgress.total)} מתוך ${scanProgress.total}`
-                : "קורא את הקבצים…"}
+              {readingWithAi
+                ? "פורמט חדש — קורא את חשבונית הספק בעזרת AI (עד דקה או שתיים)…"
+                : scanProgress
+                  ? `קורא בזיהוי תווים (OCR)… עמוד ${Math.min(scanProgress.done + 1, scanProgress.total)} מתוך ${scanProgress.total}`
+                  : "קורא את הקבצים…"}
             </span>
           )}
         </div>
@@ -215,8 +229,17 @@ export default function App() {
       </main>
 
       <footer className="site-foot">
-        <span>הצמדה דטרמיניסטית · ללא AI</span>
-        <span>הקבצים לא יוצאים מהדפדפן</span>
+        {aiOn ? (
+          <>
+            <span>הצמדה דטרמיניסטית</span>
+            <span>חשבונית ספק שלא ניתן לקרוא בדפדפן נשלחת לקריאה בעזרת AI</span>
+          </>
+        ) : (
+          <>
+            <span>הצמדה דטרמיניסטית · ללא AI</span>
+            <span>הקבצים לא יוצאים מהדפדפן</span>
+          </>
+        )}
         <span className="site-foot__version">
           גרסה <bdi>{__APP_VERSION__} ({__APP_COMMIT__})</bdi> · תצורה <bdi>{customer.configVersion}</bdi>
         </span>

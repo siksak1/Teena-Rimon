@@ -11,11 +11,18 @@ export type TextItem = {
   str: string;
   /** Font size in points (the text matrix's vertical scale). */
   size: number;
+  /** Read by OCR: what a second reading of the same word said, when it differed. */
+  alt?: string;
 };
 
 /** Contiguous run of items inside one visual row (a table cell). */
 export type Cell = {
   text: string;
+  /**
+   * Other readings of a one-word cell read by OCR, e.g. "4.50" for "450".
+   * Parsers that check arithmetic may try them; the printed totals decide.
+   */
+  alternatives?: string[];
   xMin: number;
   xMax: number;
   /** Horizontal centre — used to assign the cell to a column. */
@@ -131,29 +138,32 @@ export function toRows(items: TextItem[]): Row[] {
 function toCells(items: TextItem[]): Cell[] {
   const rtl = [...items].sort((a, b) => b.x + b.width - (a.x + a.width));
   const cells: Cell[] = [];
-  let current: { parts: string[]; xMin: number; xMax: number } | null = null;
+  let current: { parts: string[]; xMin: number; xMax: number; alt?: string } | null = null;
   for (const item of rtl) {
     const right = item.x + item.width;
     const gap = current ? current.xMin - right : Infinity;
     if (current && gap <= CELL_GAP) {
       current.parts.push(gap > WORD_GAP ? " " : "", item.str);
       current.xMin = Math.min(current.xMin, item.x);
+      current.alt = undefined;
     } else {
       if (current) cells.push(finishCell(current));
-      current = { parts: [item.str], xMin: item.x, xMax: right };
+      current = { parts: [item.str], xMin: item.x, xMax: right, alt: item.alt };
     }
   }
   if (current) cells.push(finishCell(current));
   return cells;
 }
 
-function finishCell(c: { parts: string[]; xMin: number; xMax: number }): Cell {
-  return {
+function finishCell(c: { parts: string[]; xMin: number; xMax: number; alt?: string }): Cell {
+  const cell: Cell = {
     text: collapseWhitespace(c.parts.join("")),
     xMin: c.xMin,
     xMax: c.xMax,
     x: (c.xMin + c.xMax) / 2,
   };
+  if (c.alt) cell.alternatives = [c.alt];
+  return cell;
 }
 
 /** `label` is the header as printed, for fuzzy matching of OCR-read headers. */

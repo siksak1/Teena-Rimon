@@ -43,7 +43,7 @@ export async function repairMissingText(
     const { image, heightPt } = rendered.get(p)!;
     const known = missing.items[p - 1];
     for (const item of known) eraseItem(image, item, heightPt);
-    eraseRules(image);
+    eraseRules(image, SCALE);
 
     const words = (await ocr.readLines(image, { model: "heb", unit: "word" }))
       .map((w) => ({ ...w, text: clean(w.text) }))
@@ -85,13 +85,21 @@ function fill(image: GrayImage, left: number, right: number, top: number, bottom
   }
 }
 
-/** White out long straight runs of ink: table rules and box frames confuse OCR. */
-function eraseRules(image: GrayImage): void {
+/** A vertical ruling line, in pixels: its column and the rows it spans. */
+export type VerticalRule = { x: number; top: number; bottom: number };
+
+/**
+ * White out long straight runs of ink: table rules and box frames confuse OCR.
+ * `scale` is pixels per point. Returns the vertical rules, so words that OCR
+ * read across an erased column border can be split there.
+ */
+export function eraseRules(image: GrayImage, scale: number): VerticalRule[] {
   const { width, height, data } = image;
-  const minH = MIN_HORIZONTAL_RULE * SCALE;
-  const minV = MIN_VERTICAL_RULE * SCALE;
+  const minH = MIN_HORIZONTAL_RULE * scale;
+  const minV = MIN_VERTICAL_RULE * scale;
   const ink = (x: number, y: number) => data[y * width + x] < INK;
   const runs: [number, number, number, number][] = [];
+  const verticals: VerticalRule[] = [];
   for (let y = 0; y < height; y++) {
     let start = -1;
     for (let x = 0; x <= width; x++) {
@@ -109,17 +117,21 @@ function eraseRules(image: GrayImage): void {
       if (y < height && ink(x, y)) {
         if (start < 0) start = y;
       } else if (start >= 0) {
-        if (y - start >= minV) runs.push([x, x, start, y - 1]);
+        if (y - start >= minV) {
+          runs.push([x, x, start, y - 1]);
+          verticals.push({ x, top: start, bottom: y - 1 });
+        }
         start = -1;
       }
     }
   }
   // Rules are often anti-aliased into a neighbouring pixel row or column.
   for (const [l, r, t, b] of runs) fill(image, l - 1, r + 1, t - 1, b + 1);
+  return verticals;
 }
 
 /** Words that overlap vertically by at least half the shorter one share a row. */
-function visualRows(words: OcrLine[]): OcrLine[][] {
+export function visualRows(words: OcrLine[]): OcrLine[][] {
   const rows: OcrLine[][] = [];
   for (const word of [...words].sort((a, b) => a.top - b.top)) {
     const row = rows.find((r) =>
@@ -153,7 +165,7 @@ function baseline(row: OcrLine[], anchors: TextItem[], heightPt: number): number
 }
 
 /** Drop stray rule fragments and edge punctuation Tesseract reads from cell borders. */
-function clean(text: string): string {
+export function clean(text: string): string {
   return text
     .replace(/[|_\[\]{}]/g, " ")
     .replace(/^[\s.,;'!-]+|[\s.,;'!-]+$/g, "")

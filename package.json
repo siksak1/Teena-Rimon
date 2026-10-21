@@ -2,13 +2,14 @@
   "name": "invoice-reconciliation",
   "private": true,
   "version": "1.0.0",
-  "description": "Supplier invoice reconciliation for produce wholesalers: shared parsing/matching core, browser-only React UI, static AWS hosting",
+  "description": "Supplier invoice reconciliation for produce wholesalers: shared parsing/matching core, React UI that reads invoices in the browser, static AWS hosting, AI fallback backend for unreadable formats",
   "scripts": {
     "dev": "npm run dev --prefix frontend",
     "build": "npm run build --prefix frontend",
-    "typecheck": "npm run typecheck --prefix core && CUSTOMER=teena-rimon npm run build --prefix frontend && npm run typecheck --prefix infra",
-    "install:all": "npm install --prefix core && npm install --prefix frontend && npm install --prefix infra",
-    "test": "npm test --prefix core && npm test --prefix infra",
+    "typecheck": "npm run typecheck --prefix core && CUSTOMER=teena-rimon npm run build --prefix frontend && npm run typecheck --prefix infra && npm run typecheck --prefix backend",
+    "install:all": "npm install --prefix core && npm install --prefix frontend && npm install --prefix infra && npm install --prefix backend",
+    "test": "npm test --prefix core && npm test --prefix infra && npm test --prefix backend",
+    "backend:dev": "npm run dev --prefix backend",
     "e2e": "npm run e2e --prefix frontend",
     "fixtures:update": "npm run fixtures:update --prefix core"
   }

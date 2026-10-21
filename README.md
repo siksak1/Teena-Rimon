@@ -1,6 +1,6 @@
 # LedgerMatch — Invoice Reconciliation
 
-Reconciles a supplier's consolidated invoice against the wholesaler's own document (for Teena-Rimon, the first customer: its AGROLINE draft, "חשבונית טיוטה"). Both PDFs are parsed deterministically (no AI), every supplier row is matched to the own-document rows that describe the same delivery, and the gaps are shown by reason in a Hebrew, right-to-left UI.
+Reconciles a supplier's consolidated invoice against the wholesaler's own document (for Teena-Rimon, the first customer: its AGROLINE draft, "חשבונית טיוטה"). Both PDFs are parsed in the browser, deterministically; only a supplier invoice that no reader there can read goes to the AI fallback (below). Every supplier row is matched to the own-document rows that describe the same delivery, and the gaps are shown by reason in a Hebrew, right-to-left UI.
 
 ## Architecture
 
@@ -8,8 +8,9 @@ Reconciles a supplier's consolidated invoice against the wholesaler's own docume
 /core       Pure TypeScript — PDF parsers, OCR of scanned invoices, reconciliation engine (runs in the browser and in Node for tests)
 /customers  <slug>/config.json     ← per-customer settings (see below)
 /frontend   React + Vite           ← UI; parses the PDFs and runs the reconciliation in the browser
-/infra      AWS CDK                ← static hosting (S3 + CloudFront + routing function), see DEPLOY.md
-/scripts    release.sh, token.sh   ← ship / roll back a customer's build; manage secret customer URLs
+/backend    Lambda (Node)          ← AI fallback: learned supplier layouts + Claude, for invoices no reader in the browser can read
+/infra      AWS CDK                ← static hosting (S3 + CloudFront + routing function) and the AI backend, see DEPLOY.md
+/scripts    release.sh, token.sh, formats.sh ← ship / roll back a customer's build; manage secret customer URLs; learned formats and AI usage
 /docs       it-verification-he.md, privacy-statement.md ← for customers' IT staff and the customer agreement
 /sample_data                      ← real sample invoices (one pair per supplier) used by the tests
 ```
@@ -26,9 +27,16 @@ CUSTOMER=teena-rimon npm run build
 
 The build fails if `CUSTOMER` is missing or the config is invalid. `npm run dev` defaults to `teena-rimon`. `core/test/customers.test.ts` checks every config under `customers/` and that every format and supplier it names exists.
 
-### Invoice files never leave the browser
+### Invoice files are read in the browser
 
-Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core/src/extract.ts`); there is no server-side code. pdf.js (`pdfjs-dist`, ~1.6 MB, in its own worker) is loaded on demand when the first comparison runs, and fonts are bundled (`@fontsource/*`), so the app makes no third-party requests.
+Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core/src/extract.ts`). The supplier invoice is tried, in order, by:
+
+1. the parser written for its supplier, then the generic parsers (any AGROLINE invoice; the table parser);
+2. for a scan from a supplier with no parser of its own: OCR of the whole page (`core/src/pdf/ocrDocument.ts`), then the generic parsers on the text it read. A word read across an erased column rule is split there, the digits-only reading of a number is preferred and the other kept as an alternative, and one misread row may be restored when a printed total proves it;
+3. with `aiFallback` in the customer's config: the supplier's **learned layout** (`core/src/parsers/profile.ts`: header labels, total label, discount kind — no invoice data), fetched from the backend by VAT number and applied here by the table parser (`parseWithProfile`);
+4. the AI (`backend/`, Claude Sonnet 5.5) — the only step that sends anything out: the supplier PDF and the rows read from it. Its answer is checked against the PDF's own text (`core/src/ai/verify.ts`: each row multiplies out, each amount is printed, the rows add up to the printed total); rows that fail are marked "⚠ לבדיקה". It also writes the supplier's layout, which is kept only if the table parser reads the very same lines with it, so the supplier's next invoice stops at step 3.
+
+Every step refuses unless the lines add up to a printed total, so the next one runs only when the ones before could not read the invoice. `core/test/fallbackChain.test.ts` stubs the backend; `core/test/ocrGeneric.test.ts` reads Har-Kor's scan without its parser; `core/test/profile.test.ts` reads three suppliers with hand-written layouts; `backend/test/` covers tokens, the daily cap, learning and alerts. The rest of this section is about steps 1–2. pdf.js (`pdfjs-dist`, ~1.6 MB, in its own worker) is loaded on demand when the first comparison runs, and fonts are bundled (`@fontsource/*`), so the app makes no third-party requests.
 
 **Scanned invoices** (Har-Kor) are read by OCR in the same tab:
 
@@ -53,8 +61,8 @@ npm run e2e          # production build in Chromium under the production headers
 
 After each comparison the app sends one event to PostHog Cloud EU (`frontend/src/analytics.ts`); the payload is built in `core/src/analytics.ts` and nothing else is ever sent:
 
-- `reconciliation_completed`: customer slug, app version, config version, browser family (e.g. `chrome-129`), `internal` (see below), line counts on both sides, matched groups, groups with gaps, unmatched rows on each side, offset applied, whether the supplier invoice was a scan and how many of its rows OCR could not confirm, parser-warning count, parse and reconcile time in ms, and — only when the customer's config sets `analytics.sendDiscrepancyAmount` — the invoice's net gap rounded to ₪10.
-- `reconciliation_failed`: the same identifying fields plus a fixed `error_code` (`NOT_PDF`, `FILES_SWAPPED`, `OWN_DOC_NOT_RECOGNIZED`, `UNSUPPORTED_SUPPLIER`, `NO_LINES`, `SCAN_UNREADABLE`, `TEXT_LAYER_BROKEN`, `INTERNAL`). Error messages are never sent: they contain file names.
+- `reconciliation_completed`: customer slug, app version, config version, browser family (e.g. `chrome-129`), `internal` (see below), line counts on both sides, matched groups, groups with gaps, unmatched rows on each side, offset applied, whether the supplier invoice was a scan and how many of its rows OCR could not confirm, how it was read (`supplier_source`: `dedicated`, `generic`, `ocr_generic`, `profile`, `ai`, `excel`), parser-warning count, parse and reconcile time in ms, and — only when the customer's config sets `analytics.sendDiscrepancyAmount` — the invoice's net gap rounded to ₪10.
+- `reconciliation_failed`: the same identifying fields plus a fixed `error_code` (`NOT_PDF`, `FILES_SWAPPED`, `OWN_DOC_NOT_RECOGNIZED`, `UNSUPPORTED_SUPPLIER`, `NO_LINES`, `SCAN_UNREADABLE`, `TEXT_LAYER_BROKEN`, `AI_UNAVAILABLE`, `AI_RATE_LIMITED`, `AI_UNREADABLE`, `INTERNAL`). Error messages are never sent: they contain file names.
 
 `distinct_id` is the customer slug and person profiles are off, so no individual user is identified. Requests carry no cookies and no `Referer` (the secret URL path never leaves the page). Sending is fire-and-forget, and the dev server only logs the payload to the console. `core/test/analytics.test.ts` pins the exact property list and checks, on every sample pair, that no supplier name, invoice or document number, product name or file name appears in the payload. In the PostHog project settings, keep "Discard client IP data" on.
 

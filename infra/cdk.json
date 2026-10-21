@@ -10,6 +10,11 @@
     "region": "eu-central-1",
     "domainName": "",
     "certificateArn": "",
+    "alertEmail": "namadayan@gmail.com",
+    "aiAlertThresholds": "25,50,100",
+    "aiAlertNewFormats": true,
+    "aiDailyLimit": 30,
+    "monthlyBudgetUsd": 20,
     "@aws-cdk/core:defaultCrossStackReferences": "strong"
   }
 }

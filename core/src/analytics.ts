@@ -38,10 +38,18 @@ export type CompletedProperties = {
   supplier_scanned: boolean;
   /** Scanned invoices: rows whose OCR could not be confirmed (0 otherwise). */
   ocr_uncertain_lines: number;
+  /**
+   * How the supplier invoice was read: its own parser, a generic parser, a
+   * generic parser on a scan read by OCR, the supplier's learned layout, or
+   * the AI (the only one that sends the invoice out).
+   */
+  supplier_source: SupplierSource;
   parser_warnings: number;
   parse_ms: number;
   reconcile_ms: number;
 };
+
+export type SupplierSource = "dedicated" | "generic" | "ocr_generic" | "profile" | "ai" | "excel";
 
 export type FailedProperties = {
   customer: string;
@@ -59,7 +67,7 @@ export type AnalyticsEvent =
 export function completedEvent(
   ctx: AnalyticsContext,
   result: ReconciliationResult,
-  lines: { supplier: number; own: number; scanned: boolean; ocrUncertain: number },
+  lines: { supplier: number; own: number; scanned: boolean; ocrUncertain: number; source: SupplierSource },
   timings: { parseMs: number; reconcileMs: number },
 ): AnalyticsEvent {
   const properties: CompletedProperties = {
@@ -73,6 +81,7 @@ export function completedEvent(
     offset_applied: result.offset.applies,
     supplier_scanned: lines.scanned,
     ocr_uncertain_lines: lines.ocrUncertain,
+    supplier_source: lines.source,
     parser_warnings: result.warnings.length,
     parse_ms: Math.round(timings.parseMs),
     reconcile_ms: Math.round(timings.reconcileMs),
@@ -91,7 +100,21 @@ export function lineCounts(extraction: ExtractionResult) {
     own: own.lines.length,
     scanned: supplier.scanned === true,
     ocrUncertain: supplier.lines.filter((l) => l.ocrUncertain).length,
+    source: sourceOf(extraction),
   };
+}
+
+function sourceOf({ supplier, meta }: ExtractionResult): SupplierSource {
+  if (meta.format === "excel") return "excel";
+  switch (supplier.generic) {
+    case undefined:
+      return "dedicated";
+    case "profile":
+    case "ai":
+      return supplier.generic;
+    default:
+      return supplier.scanned ? "ocr_generic" : "generic";
+  }
 }
 
 export function failedEvent(ctx: AnalyticsContext, code: ExtractionErrorCode | "INTERNAL"): AnalyticsEvent {

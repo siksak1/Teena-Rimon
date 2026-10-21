@@ -26,6 +26,7 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 require_customer "$SLUG"
+[[ "$SLUG" != "ai-test" ]] || die "ai-test is for local testing only (every supplier goes to the AI)"
 load_stack
 
 point_urls() { # <build>
@@ -70,7 +71,8 @@ case "$MODE" in
     npm run e2e --silent >/dev/null 2>&1 || die "end-to-end tests failed (run npm run e2e)"
 
     echo "Building $SLUG $BUILD…"
-    CUSTOMER="$SLUG" npm run build --silent >/dev/null
+    # The AI backend's URL; the app uses it only for customers whose config sets aiFallback.
+    VITE_AI_ENDPOINT="$AI_ENDPOINT" CUSTOMER="$SLUG" npm run build --silent >/dev/null
     grep -q 'name="robots" content="noindex, nofollow, noarchive"' frontend/dist/index.html \
       || die "built index.html lacks the noindex meta tag"
 

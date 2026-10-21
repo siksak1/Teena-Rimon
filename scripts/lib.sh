@@ -20,6 +20,8 @@ load_stack() {
   BUCKET=$(stack_output BucketName) || die "stack $STACK not found in $REGION — deploy infra first"
   KVS_ARN=$(stack_output RoutesArn)
   SITE_HOST=$(stack_output SiteHost)
+  AI_ENDPOINT=$(stack_output AiEndpoint)
+  AI_TABLE=$(stack_output AiTableName)
 }
 
 require_customer() {

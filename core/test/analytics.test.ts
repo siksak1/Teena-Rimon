@@ -11,13 +11,17 @@ const COMPLETED_KEYS = [
   "customer", "app_version", "config_version", "browser", "internal",
   "supplier_lines", "own_lines", "matched_groups", "discrepancy_count",
   "unmatched_supplier", "unmatched_own", "discrepancy_amount_nis",
-  "offset_applied", "supplier_scanned", "ocr_uncertain_lines",
+  "offset_applied", "supplier_scanned", "ocr_uncertain_lines", "supplier_source",
   "parser_warnings", "parse_ms", "reconcile_ms",
   "$process_person_profile",
 ].sort();
 const FAILED_KEYS = ["customer", "app_version", "config_version", "browser", "internal", "error_code", "$process_person_profile"].sort();
 /** The only strings allowed in a payload. */
-const ALLOWED_STRINGS = new Set(["phc_test", "reconciliation_completed", "reconciliation_failed", "teena-rimon", "1.0.0+abc1234", "chrome-129"]);
+const ALLOWED_STRINGS = new Set([
+  "phc_test", "reconciliation_completed", "reconciliation_failed", "teena-rimon", "1.0.0+abc1234", "chrome-129",
+  // supplier_source: fixed values, never from an invoice
+  "dedicated", "generic", "ocr_generic", "profile", "ai", "excel",
+]);
 
 describe("analytics payloads", () => {
   for (const pair of Object.keys(PAIRS)) {
@@ -54,13 +58,13 @@ describe("analytics payloads", () => {
   it("leaves the amount out when the customer has not opted in", async () => {
     const extraction = await extractSample("shivuk");
     const config = { ...TEENA_RIMON, analytics: { sendDiscrepancyAmount: false } };
-    const e = completedEvent({ ...ctx, config }, reconcile(extraction, config), { supplier: 1, own: 1, scanned: false, ocrUncertain: 0 }, { parseMs: 1, reconcileMs: 1 });
+    const e = completedEvent({ ...ctx, config }, reconcile(extraction, config), { supplier: 1, own: 1, scanned: false, ocrUncertain: 0, source: "dedicated" as const }, { parseMs: 1, reconcileMs: 1 });
     expect(e.properties).not.toHaveProperty("discrepancy_amount_nis");
   });
 
   it("rounds the amount to ₪10", async () => {
     const extraction = await extractSample("shivuk"); // net gap −814.25
-    const e = completedEvent(ctx, reconcile(extraction, TEENA_RIMON), { supplier: 1, own: 1, scanned: false, ocrUncertain: 0 }, { parseMs: 1, reconcileMs: 1 });
+    const e = completedEvent(ctx, reconcile(extraction, TEENA_RIMON), { supplier: 1, own: 1, scanned: false, ocrUncertain: 0, source: "dedicated" as const }, { parseMs: 1, reconcileMs: 1 });
     expect(e.properties).toMatchObject({ discrepancy_amount_nis: 810 });
   });
 
@@ -84,7 +88,7 @@ describe("analytics payloads", () => {
   it("reports a scanned invoice and how many of its rows OCR could not confirm", async () => {
     const extraction = await extractSample("harKor");
     const e = completedEvent(ctx, reconcile(extraction, TEENA_RIMON), lineCounts(extraction), { parseMs: 1, reconcileMs: 1 });
-    expect(e.properties).toMatchObject({ supplier_scanned: true, ocr_uncertain_lines: 0, supplier_lines: 34 });
+    expect(e.properties).toMatchObject({ supplier_scanned: true, ocr_uncertain_lines: 0, supplier_lines: 34, supplier_source: "dedicated" });
   });
 });
 

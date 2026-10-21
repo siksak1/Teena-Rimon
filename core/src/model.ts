@@ -25,9 +25,10 @@ export type SupplierLine = {
   /** Line total as printed — already after the line discount. */
   lineTotal: number;
   /**
-   * Scanned invoices only: fields the OCR read but could not confirm (the
-   * row's arithmetic and the printed column totals don't add up), e.g.
-   * ["quantity", "lineTotal"]. Absent when everything checked out.
+   * Invoices read by OCR or by the AI: fields that could not be confirmed
+   * (the row's arithmetic and the printed totals don't add up), or that were
+   * restored from the printed totals, e.g. ["quantity", "lineTotal"]. Absent
+   * when everything checked out.
    */
   ocrUncertain?: (keyof SupplierLine)[];
   /** Excel reports only: the grower the row belongs to (one report covers many growers). */
@@ -47,10 +48,11 @@ export type SupplierInvoice = {
   /** The supplier's VAT number, when printed. */
   vatId?: string | null;
   /**
-   * Read by a generic parser (any AGROLINE supplier, or the table parser)
-   * rather than one written for this supplier.
+   * Read by a generic parser rather than one written for this supplier: any
+   * AGROLINE supplier, the table parser (also on a scan read by OCR), the
+   * table parser with the supplier's learned layout, or the AI (last resort).
    */
-  generic?: "agroline" | "table";
+  generic?: "agroline" | "table" | "profile" | "ai";
   warnings: string[];
 };
 

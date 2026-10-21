@@ -5,16 +5,21 @@ import { missingDiscountWarning } from "./parsers/agrolineDraft.js";
 import { DIGITS } from "./ocr/table.js";
 import type { GrayImage, ScanSupport } from "./ocr/types.js";
 import { loadPdf, type PdfDocument } from "./pdf/layout.js";
+import { ocrDocument } from "./pdf/ocrDocument.js";
+import { parseWithProfile } from "./parsers/generic.js";
+import { vatCandidates } from "./parsers/profile.js";
+import { rowsPayload, type RemoteSupport } from "./remote.js";
 import { repairMissingText } from "./pdf/repair.js";
 import { crop, loadScan } from "./pdf/scan.js";
 import { round2 } from "./pdf/text.js";
 import {
   detectSupplier,
+  FALLBACK_PARSERS,
   ownDocumentParser,
   parsersToTry,
   UNSUPPORTED_SUPPLIERS,
 } from "./parsers/registry.js";
-import type { ScannedSupplierParser, SupplierParser } from "./parsers/types.js";
+import type { ScannedSupplierParser, SupplierParser, TextSupplierParser } from "./parsers/types.js";
 
 export type ExtractInput = {
   /** The wholesaler's own document (Teena-Rimon: the AGROLINE draft). */
@@ -25,15 +30,25 @@ export type ExtractInput = {
 };
 
 /**
- * Parse both PDFs deterministically. Runs in the browser (the app) and in
- * Node (the tests); invoice files are never sent anywhere. `scan` supplies
- * the image decoder and OCR for suppliers who send scanned invoices; without
- * it those invoices are rejected.
+ * Parse both PDFs. Runs in the browser (the app) and in Node (the tests).
+ * `scan` supplies the image decoder and OCR for scanned invoices; without it
+ * those invoices are rejected. The supplier invoice is tried, in order, by:
+ *
+ * 1. the parser written for its supplier, then the generic parsers;
+ * 2. a scan from a supplier with no parser of its own: OCR of the whole page,
+ *    then the generic parsers on the text it read;
+ * 3. with `remote` and `config.aiFallback`: the supplier's learned layout
+ *    (a profile fetched by VAT number, applied here);
+ * 4. the AI, through `remote` — the only step that sends the invoice out.
+ *
+ * Every reader refuses unless the lines add up to a printed total, so each
+ * step runs only when the ones before it could not read the invoice.
  */
 export async function extractInvoices(
   input: ExtractInput,
   config: CustomerConfig,
   scan?: ScanSupport,
+  remote?: RemoteSupport,
 ): Promise<ExtractionResult> {
   const ownParser = ownDocumentParser(config.ownDocument.format);
   const supplierParsers = parsersToTry(config);
@@ -68,24 +83,28 @@ export async function extractInvoices(
     return pages;
   };
 
+  const own = ownParser.parse(ownDoc, config.displayName);
+  const generic = config.genericFallback !== false;
+
   let parser: SupplierParser | null = detectSupplier(supplierDoc, supplierParsers);
   if (!parser && scan && hasNoText(supplierDoc)) parser = await detectScanned(supplierParsers, readPages, scan);
-  if (!parser) {
-    const known = UNSUPPORTED_SUPPLIERS.find((u) => supplierDoc.text.includes(u.vatId));
-    if (known) {
-      throw new ExtractionError(`חשבונית ${known.name} אינה נתמכת: ${known.reason}`, "UNSUPPORTED_SUPPLIER");
-    }
-    const supported = supplierParsers.filter((p) => !("fallback" in p && p.fallback)).map((p) => p.displayName).join(", ");
-    throw new ExtractionError(
-      config.genericFallback !== false
-        ? `לא ניתן לקרוא את חשבונית הספק בקובץ "${input.supplierFileName}" באופן אוטומטי: לא נמצאה בה טבלת פריטים שסכומיה מתאימים לסה"כ המודפס. ספקים עם פורמט ייעודי: ${supported}`
-        : `הספק בקובץ "${input.supplierFileName}" אינו נתמך עדיין. ספקים נתמכים: ${supported}`,
-      "UNSUPPORTED_SUPPLIER",
-    );
-  }
 
-  let supplier: SupplierInvoice;
-  if (parser.scanned) {
+  let supplier: SupplierInvoice | null = null;
+  /** The document the text parsers read: the PDF's text, or what OCR read from a scan. */
+  let textDoc = supplierDoc;
+  /** Why the generic parsers refused, shown when nothing else reads the invoice. */
+  let refusal: ExtractionError | null = null;
+  const tryParse = (p: TextSupplierParser, doc: PdfDocument) => {
+    try {
+      supplier = p.parse(doc);
+    } catch (err) {
+      // A generic parser refusing is expected: the next step may read the invoice.
+      if (!p.fallback || !(err instanceof ExtractionError)) throw err;
+      refusal = err;
+    }
+  };
+
+  if (parser?.scanned) {
     if (!scan) {
       throw new ExtractionError(`חשבונית ${parser.displayName} סרוקה, וקריאת סריקות אינה זמינה כאן`, "UNSUPPORTED_SUPPLIER");
     }
@@ -97,35 +116,111 @@ export async function extractInvoices(
       );
     }
     scan.onProgress?.(0, scanned.length);
-    supplier = await parser.parseScan(scanned, ocr, (done) => scan.onProgress?.(done, scanned.length));
-  } else {
-    supplier = parser.parse(supplierDoc);
+    const scannedParser = parser;
+    supplier = await scannedParser.parseScan(scanned, ocr, (done) => scan.onProgress?.(done, scanned.length));
+  } else if (parser) {
+    tryParse(parser, supplierDoc);
   }
-  if (supplier.lines.length === 0) {
-    throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser.displayName}`, "NO_LINES");
+
+  // A scan from a supplier with no parser of its own: read the whole page by OCR, then the generic parsers.
+  if (!supplier && !parser?.scanned && generic && scan && !UNSUPPORTED_SUPPLIERS.some((u) => supplierDoc.text.includes(u.vatId))) {
+    const scanned = await readPages();
+    if (scanned) {
+      textDoc = await ocrDocument(scanned, await scan.ocr(), (done, total) => scan.onProgress?.(done, total));
+      const fallback = detectSupplier(textDoc, FALLBACK_PARSERS);
+      if (fallback && !fallback.scanned) tryParse(fallback, textDoc);
+      if (supplier) (supplier as SupplierInvoice).scanned = true;
+    }
   }
-  const own = ownParser.parse(ownDoc, config.displayName);
-  if (supplier.generic) nameFromOwnDocument(supplier, own, supplierDoc);
+
+  // The backend: the supplier's learned layout, then the AI.
+  if (!supplier && remote && config.aiFallback && !UNSUPPORTED_SUPPLIERS.some((u) => textDoc.text.includes(u.vatId))) {
+    // A scan the generic parsers did not try (they are off): its layout is learned from what OCR reads.
+    const scanned = textDoc !== supplierDoc ? true : scan ? await readPages() : null;
+    if (scanned && scanned !== true && scan) {
+      textDoc = await ocrDocument(scanned, await scan.ocr(), (done, total) => scan.onProgress?.(done, total));
+    }
+    supplier = await readRemotely(remote, input, textDoc, own, textDoc !== supplierDoc);
+  }
+
+  if (!supplier) {
+    const known = UNSUPPORTED_SUPPLIERS.find((u) => supplierDoc.text.includes(u.vatId));
+    if (known) {
+      throw new ExtractionError(`חשבונית ${known.name} אינה נתמכת: ${known.reason}`, "UNSUPPORTED_SUPPLIER");
+    }
+    if (refusal) throw refusal;
+    const supported = supplierParsers.filter((p) => !("fallback" in p && p.fallback)).map((p) => p.displayName).join(", ");
+    throw new ExtractionError(
+      generic
+        ? `לא ניתן לקרוא את חשבונית הספק בקובץ "${input.supplierFileName}" באופן אוטומטי: לא נמצאה בה טבלת פריטים שסכומיה מתאימים לסה"כ המודפס. ספקים עם פורמט ייעודי: ${supported}`
+        : `הספק בקובץ "${input.supplierFileName}" אינו נתמך עדיין. ספקים נתמכים: ${supported}`,
+      "UNSUPPORTED_SUPPLIER",
+    );
+  }
+
+  const invoice: SupplierInvoice = supplier;
+  if (invoice.lines.length === 0) {
+    throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser?.displayName ?? "הספק"}`, "NO_LINES");
+  }
+  if (invoice.generic) nameFromOwnDocument(invoice, own, textDoc);
   if (ownDoc.repairedByOcr) own.warnings.push(ocrRepairWarning(input.ownFileName));
-  if (supplierDoc.repairedByOcr) supplier.warnings.push(ocrRepairWarning(input.supplierFileName));
-  const unprinted = config.unprintedDiscounts?.[parser.id];
-  if (unprinted != null) applyUnprintedDiscount(supplier, own, unprinted, config.displayName);
+  if (supplierDoc.repairedByOcr) invoice.warnings.push(ocrRepairWarning(input.supplierFileName));
+  if (textDoc !== supplierDoc && invoice.generic !== "ai") invoice.warnings.push(ocrScanWarning(input.supplierFileName));
+  const unprinted = parser && !invoice.generic ? config.unprintedDiscounts?.[parser.id] : undefined;
+  if (unprinted != null) applyUnprintedDiscount(invoice, own, unprinted, config.displayName);
+  supplier = invoice;
 
   const digits = (s: string | null) => (s ?? "").replace(/\D/g, "");
-  if (own.againstInvoice && !digits(supplier.invoiceNumber).endsWith(digits(own.againstInvoice))) {
+  if (own.againstInvoice && !digits(invoice.invoiceNumber).endsWith(digits(own.againstInvoice))) {
     own.warnings.push(
-      `חשבונית הטיוטה הופקה כנגד חשבונית ${own.againstInvoice}, אבל חשבונית הספק היא ${supplier.invoiceNumber}`,
+      `חשבונית הטיוטה הופקה כנגד חשבונית ${own.againstInvoice}, אבל חשבונית הספק היא ${invoice.invoiceNumber}`,
     );
   }
 
   return {
-    supplier,
+    supplier: invoice,
     own,
     meta: {
       ownFileName: input.ownFileName,
       supplierFileName: input.supplierFileName,
     },
   };
+}
+
+/**
+ * Steps 3 and 4: the supplier's learned layout if the backend has one for a
+ * VAT number on the invoice (the draft's addressee first), else the AI.
+ */
+async function readRemotely(
+  remote: RemoteSupport,
+  input: ExtractInput,
+  doc: PdfDocument,
+  own: OwnInvoice,
+  scanned: boolean,
+): Promise<SupplierInvoice> {
+  const vatHint = own.counterparty?.vatId ?? null;
+  const digits = doc.rows.map((r) => r.text).join("\n");
+  const vatIds = [...new Set([vatHint, ...vatCandidates(digits)].filter((v): v is string => v != null))];
+  for (const profile of await remote.profiles(vatIds).catch(() => [])) {
+    try {
+      const invoice = parseWithProfile(doc, profile);
+      if (scanned) invoice.scanned = true;
+      return invoice;
+    } catch (err) {
+      if (!(err instanceof ExtractionError)) throw err;
+      // The layout changed: the AI reads the invoice and learns it again.
+    }
+  }
+  remote.onAiStart?.();
+  const invoice = await remote.readWithAi({
+    pdf: input.supplierPdf,
+    fileName: input.supplierFileName,
+    scanned,
+    rows: rowsPayload(doc),
+    vatHint,
+  });
+  if (scanned) invoice.scanned = true;
+  return invoice;
 }
 
 /**
@@ -165,6 +260,13 @@ async function withMissingText(
   const ocr = await scan.ocr();
   scan.onProgress?.(0, doc.missingText.items.length);
   return repairMissingText(doc, data, ocr, (done, total) => scan.onProgress?.(done, total));
+}
+
+export function ocrScanWarning(fileName: string): string {
+  return (
+    `החשבונית בקובץ "${fileName}" סרוקה ונקראה ב-OCR. הסכומים אומתו מול הסה"כ המודפס, ` +
+    `אך שמות המוצרים ומספרי התעודות עלולים להכיל שגיאות קריאה`
+  );
 }
 
 export function ocrRepairWarning(fileName: string): string {

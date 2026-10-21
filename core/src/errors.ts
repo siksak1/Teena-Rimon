@@ -11,7 +11,10 @@ export type ExtractionErrorCode =
   | "SCAN_UNREADABLE"
   | "TEXT_LAYER_BROKEN"
   | "NOT_EXCEL"
-  | "MISSING_COLUMN";
+  | "MISSING_COLUMN"
+  | "AI_UNAVAILABLE"
+  | "AI_RATE_LIMITED"
+  | "AI_UNREADABLE";
 
 /** Raised when a PDF or Excel file cannot be parsed; `message` is shown to the user (Hebrew). */
 export class ExtractionError extends Error {

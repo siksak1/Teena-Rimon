@@ -1,5 +1,10 @@
 /// <reference types="vite/client" />
 
+interface ImportMetaEnv {
+  /** The AI backend's URL (the stack's AiEndpoint); unset: no AI, whatever the config says. */
+  readonly VITE_AI_ENDPOINT?: string;
+}
+
 /** Root package.json version, injected at build time. */
 declare const __APP_VERSION__: string;
 /** Short git commit of the build ("-dirty" when built with uncommitted changes). */

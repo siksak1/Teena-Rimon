@@ -4,7 +4,10 @@ import { expect, test, type Page } from "@playwright/test";
 // The production build, served under a fake token with production headers (e2e/serve.mjs).
 const APP = "/e2e-test-token-0123456789/";
 const ANALYTICS = "https://eu.i.posthog.com/";
+/** The fake AI backend the e2e build points at (VITE_AI_ENDPOINT in npm run e2e); answered by page.route. */
+const AI = "https://ai.e2e.test/";
 const sample = (name: string) => fileURLToPath(new URL(`../../sample_data/${name}`, import.meta.url));
+const repoFile = (path: string) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
 
 type Watch = {
   /** Every request the page made: "METHOD url". */
@@ -54,10 +57,11 @@ test("is not indexable and runs under the production security headers", async ({
   const headers = response!.headers();
   expect(headers["x-robots-tag"]).toBe("noindex, nofollow, noarchive");
   expect(headers["referrer-policy"]).toBe("no-referrer");
-  expect(headers["content-security-policy"]).toContain("connect-src https://eu.i.posthog.com;");
+  expect(headers["content-security-policy"]).toContain(`connect-src https://eu.i.posthog.com ${AI};`);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow, noarchive");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("השוואת חשבונית ספק מול תאנה ורימון");
-  await expect(page.locator(".site-foot")).toContainText("תצורה 5");
+  await expect(page.locator(".site-foot")).toContainText("תצורה 6");
+  await expect(page.locator(".site-foot")).toContainText("נשלחת לקריאה בעזרת AI");
 });
 
 test("reconciles real invoices in the browser; only a counts-only event leaves the page", async ({ page, baseURL }) => {
@@ -176,6 +180,67 @@ test("reports a failure by error code only", async ({ page, baseURL }) => {
   expect(await watch.violations()).toEqual([]);
 });
 
+test("sends an invoice no reader in the browser can read to the AI backend, and nothing else", async ({ page, baseURL }) => {
+  const watch = await open(page);
+  const calls: { method: string; path: string; token: string | null; body: Record<string, unknown> | null }[] = [];
+  await page.route(`${AI}**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    calls.push({ method: request.method(), path: url.pathname, token: request.headers()["x-customer-token"] ?? null, body: request.postDataJSON() });
+    if (url.pathname === "/profiles") return route.fulfill({ json: { profiles: [] } });
+    return route.fulfill({
+      json: {
+        verified: true,
+        learned: true,
+        newFormat: true,
+        invoice: {
+          supplierId: "ai-570046193",
+          supplierName: "ספק חדש",
+          vatId: "570046193",
+          invoiceNumber: "A-1001",
+          invoiceDate: "2026-09-30",
+          printedItemsTotal: 1980,
+          lines: [
+            { id: "S1", page: 1, date: "2026-08-31", docNumber: null, bookRef: "263125", description: "גזר אא בשקית 1 קג קרטון", variety: "", sku: "11001", packages: null, quantity: 660, unit: "ק\"ג", unitPrice: 3, discountPct: 0, lineTotal: 1980 },
+          ],
+          warnings: ["החשבונית נקראה בעזרת AI, כי אף קורא אחר לא הצליח לקרוא אותה."],
+          generic: "ai",
+        },
+      },
+    });
+  });
+
+  const inputs = page.locator('input[type="file"]');
+  await inputs.nth(0).setInputFiles(sample("1 תאנה ורימון.pdf"));
+  await inputs.nth(1).setInputFiles(repoFile("samples/supplier-invoice.pdf"));
+  await page.getByRole("button", { name: "השוואת החשבוניות" }).click();
+
+  await expect(page.locator(".results h2")).toContainText("ספק חדש · חשבונית A-1001", { timeout: 60_000 });
+  await expect(page.locator(".eyebrow .chip")).toHaveText("נקרא בעזרת AI");
+  await expect(page.locator(".banner--scan")).toContainText("כל השורות אומתו");
+
+  // A layout lookup by VAT number first (labels only come back), then the one upload, both with the customer's token.
+  expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(["GET /profiles", "POST /parse"]);
+  expect(calls.every((c) => c.token === "e2e-test-token-0123456789")).toBe(true);
+  expect(calls[1].body).toMatchObject({ fileName: "supplier-invoice.pdf", scanned: false, vatHint: "570046193" });
+  expect(String(calls[1].body!.pdf).startsWith("JVBERi")).toBe(true); // %PDF, base64
+
+  await expect.poll(() => watch.analytics.length).toBe(1);
+  expect(watch.analytics[0]).toMatchObject({ event: "reconciliation_completed", properties: { supplier_source: "ai", supplier_lines: 1 } });
+  expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]|A-1001|570046193/);
+  const outside = unexpectedRequests(watch, baseURL!).filter((r) => !r.startsWith(`GET ${AI}profiles`) && r !== `POST ${AI}parse`);
+  expect(outside).toEqual([]);
+  expect(await watch.violations()).toEqual([]);
+  expect(watch.consoleErrors).toEqual([]);
+});
+
+test("never contacts the AI backend for an invoice the browser reads", async ({ page }) => {
+  const watch = await open(page);
+  await compare(page, "גרנות אצל תאנה ורימון.pdf", "גרנות 17.09.pdf");
+  await expect(page.locator(".results h2")).toContainText("גרנות · חשבונית SI26602203");
+  expect(watch.requests.filter((r) => r.includes("ai.e2e.test"))).toEqual([]);
+});
+
 test("the browser blocks sending data anywhere else, even to our own server", async ({ page }) => {
   const watch = await open(page);
   const attempt = (url: string) =>
@@ -198,10 +263,11 @@ test("reads Excel reports with other column names, and says which columns it use
   await page.getByRole("button", { name: "השוואת הדוחות" }).click();
 
   await expect(page.locator(".total-card--hot strong")).toContainText("20,018.77");
-  await expect(page.locator(".count-strip")).toContainText("רק אצל הספק: 28");
+  await expect(page.locator(".count-strip")).toContainText("רק אצל הספק: 21");
   await page.getByText("העמודות שזוהו").click();
   await expect(page.locator(".results__columns")).toContainText("תעודת משלוח ← תעודה");
   await expect(page.locator(".results__columns")).toContainText("תעודת משלוח ← אסמכתא");
+
   expect(watch.consoleErrors).toEqual([]);
 });
 

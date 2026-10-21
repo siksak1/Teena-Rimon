@@ -13,6 +13,14 @@ type Props = {
   result: ReconciliationResult;
 };
 
+/** The chip beside the results title: how the supplier invoice was read, when not by its own parser. */
+const SOURCE_CHIPS = {
+  agroline: { label: "פורמט כללי", title: "לספק זה אין קורא ייעודי: החשבונית נקראה כחשבונית AGROLINE, והסכומים אומתו מול הסה\"כ המודפס" },
+  table: { label: "פורמט כללי", title: "לספק זה אין קורא ייעודי: החשבונית נקראה לפי מבנה הטבלה, והסכומים אומתו מול הסה\"כ המודפס" },
+  profile: { label: "מבנה נלמד", title: "החשבונית נקראה בדפדפן לפי מבנה שנלמד מחשבונית קודמת של ספק זה, והסכומים אומתו מול הסה\"כ המודפס" },
+  ai: { label: "נקרא בעזרת AI", title: "אף קורא בדפדפן לא הצליח לקרוא את החשבונית, והיא נקראה בעזרת AI ונבדקה מול החשבונית" },
+} as const;
+
 export function ReconciliationView(props: Props) {
   return (
     <SelectionProvider>
@@ -59,8 +67,8 @@ function Results({ extraction, result }: Props) {
         <p className="eyebrow">
           תוצאות ההתאמה
           {!excel && extraction.supplier.generic && (
-            <span className="chip" title="לספק זה אין קורא ייעודי: החשבונית נקראה לפי מבנה הטבלה, והסכומים אומתו מול הסה&quot;כ המודפס">
-              פורמט כללי
+            <span className="chip" title={SOURCE_CHIPS[extraction.supplier.generic].title}>
+              {SOURCE_CHIPS[extraction.supplier.generic].label}
             </span>
           )}
         </p>
@@ -129,7 +137,20 @@ function Results({ extraction, result }: Props) {
         <span role="listitem">רק אצל {ownName}: <strong>{result.ownOnly.length}</strong></span>
       </div>
 
-      {supplier.scanned && (
+      {supplier.generic === "ai" && (
+        <div className="banner banner--scan" role="status">
+          <strong>פורמט חדש — החשבונית נקראה בעזרת AI</strong>
+          <p>
+            אף קורא בדפדפן לא הצליח לקרוא את החשבונית, ולכן היא נשלחה לקריאה בעזרת AI. כל שורה נבדקה (כמות × מחיר =
+            סה"כ, והסכומים מודפסים בחשבונית) וסכום השורות נבדק מול הסה"כ המודפס.{" "}
+            {ocrUncertain === 0
+              ? "כל השורות אומתו. מבנה החשבונית נשמר, וחשבוניות הבאות של ספק זה ייקראו בדפדפן."
+              : `${ocrUncertain} שורות לא אומתו ומסומנות "${OCR_MARK}" — יש לבדוק אותן מול החשבונית.`}
+          </p>
+        </div>
+      )}
+
+      {supplier.scanned && supplier.generic !== "ai" && (
         <div className="banner banner--scan" role="status">
           <strong>חשבונית סרוקה — נקראה בזיהוי תווים (OCR) בדפדפן</strong>
           <p>
