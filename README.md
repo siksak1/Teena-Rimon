@@ -36,7 +36,9 @@ Both PDFs are parsed in the browser tab (`frontend/src/api/extract.ts` → `core
 3. with `aiFallback` in the customer's config: the supplier's **learned layout** (`core/src/parsers/profile.ts`: header labels, total label, discount kind — no invoice data), fetched from the backend by VAT number and applied here by the table parser (`parseWithProfile`);
 4. the AI (`backend/`, Claude Sonnet 5.5) — the only step that sends anything out: the supplier PDF and the rows read from it. Its answer is checked against the PDF's own text (`core/src/ai/verify.ts`: each row multiplies out, each amount is printed, the rows add up to the printed total); rows that fail are marked "⚠ לבדיקה". It also writes the supplier's layout, which is kept only if the table parser reads the very same lines with it, so the supplier's next invoice stops at step 3.
 
-Every step refuses unless the lines add up to a printed total, so the next one runs only when the ones before could not read the invoice. `core/test/fallbackChain.test.ts` stubs the backend; `core/test/ocrGeneric.test.ts` reads Har-Kor's scan without its parser; `core/test/profile.test.ts` reads three suppliers with hand-written layouts; `backend/test/` covers tokens, the daily cap, learning and alerts. The rest of this section is about steps 1–2. pdf.js (`pdfjs-dist`, ~1.6 MB, in its own worker) is loaded on demand when the first comparison runs, and fonts are bundled (`@fontsource/*`), so the app makes no third-party requests.
+Every step refuses unless the lines add up to a printed total, so the next one runs only when the ones before could not read the invoice. `core/test/fallbackChain.test.ts` stubs the backend; `core/test/ocrGeneric.test.ts` reads Har-Kor's scan without its parser; `core/test/profile.test.ts` reads three suppliers with hand-written layouts; `backend/test/` covers tokens, the daily cap, learning and alerts. The rest of this section is about steps 1–2; steps 3–4 are summed up under [AI fallback](#ai-fallback) below.
+
+pdf.js (`pdfjs-dist`, ~1.6 MB, in its own worker) is loaded on demand when the first comparison runs, and fonts are bundled (`@fontsource/*`), so the app makes no third-party requests besides analytics and, for step 4 only, the AI backend.
 
 **Scanned invoices** (Har-Kor) are read by OCR in the same tab:
 
@@ -47,6 +49,20 @@ Every step refuses unless the lines add up to a printed total, so the next one r
 - The tests run the same OCR in Node (`core/test/scanSupport.ts`).
 
 **PDFs with no Hebrew text.** A PDF printed with "Microsoft Print to PDF" embeds its fonts without a Unicode map for Hebrew: digits and amounts extract, every Hebrew letter comes out blank (e.g. `sample_data/גליל טטיט.pdf`). `loadPdf` flags such a document (`missingText`), and `core/src/pdf/repair.ts` renders each page with pdf.js, whites out the text that did extract and the ruling lines, and reads the rest word by word with the same Tesseract (`heb`). The words are placed where they are printed, so the usual parsers read the document as if it were whole; header and footer labels are matched with a small edit-distance tolerance (`fuzzyEquals` in `layout.ts`). Amounts always come from the exact text layer. The document carries a warning that its names were read by OCR. Without OCR available the file is refused with `TEXT_LAYER_BROKEN` and a hint to print with "Save as PDF" instead.
+
+## AI fallback
+
+For supplier formats nothing in the browser can read (in practice: a new supplier's first invoice). Code: `backend/` (Lambda), `core/src/ai/verify.ts`, `core/src/parsers/profile.ts`; setup and operations: [DEPLOY.md](DEPLOY.md) → AI fallback.
+
+**Working assumptions**
+
+- **AI is the last resort.** Every free, local reader runs first (own parser → generic parsers → OCR + generic for scans → learned layout). Only the supplier invoice is ever sent, never the wholesaler's own document, and only for customers whose config sets `aiFallback: true` (an agreement matter: `docs/privacy-statement.md`).
+- **The AI is never trusted.** Its reading is checked against the PDF's own text (rows multiply out, every amount is printed, rows add up to the printed total, a printed rounding line may explain up to ₪1). Unconfirmed rows are shown marked "⚠ לבדיקה", never silently fixed.
+- **Each supplier needs the AI about once.** The AI also describes the supplier's layout (header labels, total label, discount kind — no invoice data). It is stored by VAT number, shared by all customers, and kept only if the table parser reproduces the AI's lines with it. Later invoices are read in the browser with it; if the supplier changes its layout, the layout stops fitting, the AI reads the invoice once more and the layout is learned again (version + 1).
+- **Model and cost:** Claude Sonnet 5.5, effort `low`, about $0.05–0.10 per read. At under 200 supplier invoices a month, expected spend is about $1–3. Bounds: 30 AI reads per customer per day, e-mails at 25 / 50 / 100 reads a month and for each new format, an AWS budget alarm at $20, and the spend limit on the Anthropic key.
+- **Secrets:** the Anthropic key lives only in SSM (`/ledgermatch/anthropic-api-key`). The backend accepts only a valid customer URL token and logs counts only.
+
+**Tracking:** `scripts/formats.sh list | usage | show <vat> | delete <vat>`; PostHog's `supplier_source` (`dedicated`, `generic`, `ocr_generic`, `profile`, `ai`). A supplier that keeps needing the AI is a candidate for a generic-parser fix or a parser of its own.
 
 ## Quick start
 
@@ -155,25 +171,27 @@ Product names are matched by `NameMatcher` (`core/src/reconcile/names/`): names 
 
 ## Deployment (AWS)
 
-A static site with no server code. Details, prerequisites and post-deploy checks: [DEPLOY.md](DEPLOY.md).
+A static site, plus one Lambda for the AI fallback. Details, prerequisites and post-deploy checks: [DEPLOY.md](DEPLOY.md).
 
 ```
 Browser ──► CloudFront ──(viewer-request Function + KeyValueStore)──► private S3 bucket
 https://<host>/<token>/     token → {customer, build}                builds/<customer>/<build>/…
 ```
 
-- **Stack `LedgerMatchStatic`** (eu-central-1, `infra/`) contains a private S3 bucket, a CloudFront distribution, a CloudFront Function with a KeyValueStore, and a response-headers policy. There is no Lambda, database or secret.
+- **Stack `LedgerMatchStatic`** (eu-central-1, `infra/`) contains a private S3 bucket, a CloudFront distribution, a CloudFront Function with a KeyValueStore, a response-headers policy, and the AI fallback: a Lambda with a Function URL, a DynamoDB table (learned layouts, usage counters), an SNS topic for alert e-mails and a budget alarm. The one secret, the Anthropic API key, is in SSM, not in the stack.
 - **One secret URL per customer:** `https://<host>/<customer>-<16 random chars>/`. Tokens live only in the KeyValueStore, never in git. Any other path, `/` and `/robots.txt` get a 404 from the function.
-- **Every response** carries a CSP allowing only the app's own files plus `https://eu.i.posthog.com`, `X-Robots-Tag: noindex, nofollow, noarchive` and `Referrer-Policy: no-referrer`. The headers are defined in `infra/security-headers.json`, which the end-to-end tests also use.
+- **Every response** carries a CSP allowing only the app's own files plus `https://eu.i.posthog.com` and the AI backend's Function URL, `X-Robots-Tag: noindex, nofollow, noarchive` and `Referrer-Policy: no-referrer`. The headers are defined in `infra/security-headers.json`, which the end-to-end tests also use.
 - **Each build is immutable:** `builds/<customer>/<version>-<commit>/`. A release uploads a new build and repoints the customer's URLs. Rollback repoints them to an older build. Nothing is ever overwritten or invalidated.
 
-**Estimated monthly cost: about $0–1.**
+**Estimated monthly cost: about $1–4**, almost all of it AI reads.
 
 | Item | At current scale (1 customer, ~2,000 comparisons/month) |
 | --- | --- |
 | CloudFront: transfer, requests, Function invocations | $0 (always-free tier: 1 TB, 10M requests, 2M function invocations) |
 | S3 (≈12 MB per build, ~7 MB of it OCR loaded only for scans) and the KeyValueStore | a few cents |
 | PostHog Cloud EU | $0 (free tier: 1M events; ~1 event per comparison) |
+| AI fallback: Lambda, DynamoDB, SNS, logs | a few cents |
+| Claude (Sonnet 5.5), only for invoices nothing else reads | about $1–3 (≈$0.05–0.10 per read) |
 
 A handful of customers stays within the free tiers. A custom domain later adds the domain fee only, because the ACM certificate is free.
 
@@ -192,6 +210,13 @@ scripts/release.sh teena-rimon --point <previous build>
 ```
 
 Customer URLs: `scripts/token.sh add | rotate | revoke | list`. Infrastructure changes (rare): `cd infra && npx cdk diff && npx cdk deploy`.
+
+**Test links.** Besides each customer's production URL there are two private preview URLs (never write a URL into this repo — it is public; `scripts/token.sh list` shows them). They cost nothing while unused: a KeyValueStore entry and a ~10 MB build each; AI reads made on them cost as anywhere else.
+
+| Link | Serves | Use it to |
+| --- | --- | --- |
+| `teena-rimon` preview | Teena-Rimon's config, a build of your choice (`scripts/release.sh teena-rimon --preview`) | try a new version on real invoices before moving production to it (`--point <build>`) |
+| `ai-test` preview | the `ai-test` config: no supplier parsers, generic parsers off, AI on (`scripts/release.sh ai-test --preview`) | try the AI fallback with any known supplier: the first upload goes to the AI, the second is read with the learned layout. Preview only; `release.sh` and `token.sh` refuse it on production |
 
 ## Ports
 
