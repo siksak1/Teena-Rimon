@@ -2,7 +2,7 @@ import { useState } from "react";
 import { type ExcelField, FIELD_LABELS } from "@core/excel/fields.js";
 import type { ExtractionResult, ReconciliationResult } from "@core/model.js";
 import customer from "@customer-config";
-import { money, OCR_MARK, percent, shortDate, signedMoney } from "./format";
+import { money, OCR_MARK, percent, shortDate, signedMoney, UNREAD_MARK } from "./format";
 import { OwnOnlyTable, SupplierOnlyTable } from "./LineTables";
 import { MatchedGroupsTable } from "./MatchedGroupsTable";
 import { useSelection } from "./selection";
@@ -16,7 +16,7 @@ type Props = {
 /** The chip beside the results title: how the supplier invoice was read, when not by its own parser. */
 const SOURCE_CHIPS = {
   agroline: { label: "פורמט כללי", title: "לספק זה אין קורא ייעודי: החשבונית נקראה כחשבונית AGROLINE, והסכומים אומתו מול הסה\"כ המודפס" },
-  table: { label: "פורמט כללי", title: "לספק זה אין קורא ייעודי: החשבונית נקראה לפי מבנה הטבלה, והסכומים אומתו מול הסה\"כ המודפס" },
+  table: { label: "פורמט כללי", title: "לספק זה אין קורא ייעודי, או שהקורא הייעודי לא קרא את כל השורות: החשבונית נקראה לפי מבנה הטבלה, והסכומים אומתו מול הסה\"כ המודפס" },
   profile: { label: "מבנה נלמד", title: "החשבונית נקראה בדפדפן לפי מבנה שנלמד מחשבונית קודמת של ספק זה, והסכומים אומתו מול הסה\"כ המודפס" },
   ai: { label: "נקרא בעזרת AI", title: "אף קורא בדפדפן לא הצליח לקרוא את החשבונית, והיא נקראה בעזרת AI ונבדקה מול החשבונית" },
 } as const;
@@ -47,6 +47,8 @@ function Results({ extraction, result }: Props) {
   const excel = extraction.meta.format === "excel";
   const docs = excel ? "הדוחות" : "החשבוניות";
   const ocrUncertain = supplier.lines.filter((l) => l.ocrUncertain).length;
+  const unread = supplier.lines.filter((l) => l.unread).length;
+  const excluded = supplier.excludedRows ?? [];
 
   async function handleExport() {
     setExporting("busy");
@@ -162,6 +164,16 @@ function Results({ extraction, result }: Props) {
         </div>
       )}
 
+      {unread > 0 && (
+        <div className="banner banner--warn" role="status">
+          <strong>{unread} שורות בחשבונית הספק לא נקראו אוטומטית</strong>
+          <p>
+            הקורא של החשבונית לא הצליח לקרוא את כל השורות. השורות החסרות נוספו לפי החשבון שבהן (כמות × מחיר = סה"כ),
+            משתתפות בהשוואה ומסומנות "{UNREAD_MARK}" — יש לבדוק אותן מול החשבונית.
+          </p>
+        </div>
+      )}
+
       {result.warnings.length > 0 && (
         <div className="banner banner--warn" role="status">
           <strong>אזהרות קריאה</strong>
@@ -207,6 +219,37 @@ function Results({ extraction, result }: Props) {
           <p className="empty">כל שורות {ownName} הוצמדו.</p>
         )}
       </section>
+
+      {excluded.length > 0 && (
+        <section className="results__section">
+          <details className="excluded">
+            <summary>
+              <h3>שורות שלא נכללו בהשוואה — משטחים ופקדונות ({excluded.length}, {money(excluded.reduce((s, r) => s + r.total, 0))})</h3>
+            </summary>
+            <p className="section-hint">שורות אלה מופיעות בחשבונית הספק אך אינן חלק מהשוואת הפריטים.</p>
+            <div className="table-wrap">
+            <table className="rec-table">
+              <thead>
+                <tr>
+                  <th>עמוד</th>
+                  <th>השורה כפי שהודפסה</th>
+                  <th>סה"כ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {excluded.map((r, i) => (
+                  <tr key={i}>
+                    <td className="mono">{r.page}</td>
+                    <td className="name">{r.text}</td>
+                    <td className="mono">{money(r.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </details>
+        </section>
+      )}
 
       <section className="results__section">
         <h3>קיזוז פערים</h3>

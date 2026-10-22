@@ -533,3 +533,11 @@
     grid-template-columns: 1fr;
   }
 }
+
+.excluded summary {
+  cursor: pointer;
+}
+
+.excluded summary h3 {
+  display: inline;
+}

@@ -88,9 +88,9 @@ const HEADER_REACH = 80;
 /** Printed totals may differ from the line sum by per-line rounding. */
 const TOTAL_TOLERANCE = 0.06;
 
-type Amount = { cell: Cell; value: number };
-type Arithmetic = { quantity: Amount; price: Amount; total: Amount; discount: number };
-type ItemRow = { row: Row; math: Arithmetic };
+export type Amount = { cell: Cell; value: number };
+export type Arithmetic = { quantity: Amount; price: Amount; total: Amount; discount: number };
+export type ItemRow = { row: Row; math: Arithmetic };
 type HeaderColumn = { x: number; xMin: number; xMax: number; label: string; field: HeaderField | null };
 
 function parseGeneric(doc: PdfDocument): SupplierInvoice {
@@ -323,7 +323,7 @@ function percentages(text: string): number[] {
 }
 
 /** Discount rates printed outside the item rows ("הנחה סחורה 12.00%", "הנחה 12.0%"). */
-function documentDiscounts(doc: PdfDocument): number[] {
+export function documentDiscounts(doc: PdfDocument): number[] {
   return [...new Set(doc.rows.filter((r) => r.text.includes("הנחה")).flatMap((r) => percentages(r.text)))];
 }
 
@@ -339,7 +339,6 @@ function rowReadings(row: Row, docDiscounts: number[], profile?: SupplierProfile
   const readings: Arithmetic[] = [];
   for (let t = 0; t < nums.length; t++) {
     const total = nums[t];
-    if (total.value < 0) continue;
     for (let p = t + 1; p < nums.length; p++) {
       const price = nums[p];
       if (price.cell === total.cell) continue;
@@ -352,7 +351,9 @@ function rowReadings(row: Row, docDiscounts: number[], profile?: SupplierProfile
         .filter((d) => d > 0 && d <= MAX_DISCOUNT);
       for (let q = p + 1; q < nums.length; q++) {
         const quantity = nums[q];
-        if (quantity.value <= 0 || quantity.cell === price.cell || quantity.cell === total.cell) continue;
+        // A credit (a return) prints its quantity and total negative, at the usual price.
+        const sameSign = total.value < 0 ? quantity.value < 0 : quantity.value > 0;
+        if (!sameSign || quantity.cell === price.cell || quantity.cell === total.cell) continue;
         for (const discount of [0, ...rowDiscounts, ...docDiscounts, ...implied]) {
           if (close(quantity.value * price.value * (1 - discount), total.value)) {
             readings.push({ quantity, price, total, discount });
@@ -392,7 +393,7 @@ type TableColumns = { totalX: number; priceX: number; quantityXs: number[] };
  * number or code that happens to multiply out is not taken for a quantity.
  * Free lines (0 × price) only count inside those columns.
  */
-function findItemRows(doc: PdfDocument, docDiscounts: number[]): { rows: ItemRow[]; columns: TableColumns | null } {
+export function findItemRows(doc: PdfDocument, docDiscounts: number[]): { rows: ItemRow[]; columns: TableColumns | null } {
   const profile = profileOf(doc);
   const skip = (profile?.skipRows ?? []).map((p) => new RegExp(p));
   const candidates = doc.rows

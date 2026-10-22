@@ -17,6 +17,8 @@ import {
   shownDateDelta,
   OCR_MARK,
   ocrUncertainFields,
+  UNREAD_MARK,
+  UNREAD_TITLE,
   supplierItem,
   supplierItemMarked,
   supplierRef,
@@ -42,7 +44,7 @@ function groupTone(g: MatchGroup, tone: Props["tone"]): string {
 }
 
 /** Groups start open when they have a money difference or a scanned row to check. */
-const openByDefault = (g: MatchGroup) => g.netDiff !== 0 || g.supplierLines.some((l) => l.ocrUncertain);
+const openByDefault = (g: MatchGroup) => g.netDiff !== 0 || g.supplierLines.some((l) => l.ocrUncertain || l.unread);
 
 /** The text of each line as shown in the table, one entry per column, for the column filters. */
 function lineCells(g: MatchGroup, ownDiscountPct: number, growers: boolean): string[][] {
@@ -211,6 +213,11 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", g
                           {l.ocrUncertain && (
                             <span className="ocr-mark" title={`לא אומת בזיהוי התווים: ${ocrUncertainFields(l)}`}>
                               {OCR_MARK}
+                            </span>
+                          )}
+                          {l.unread && (
+                            <span className="ocr-mark" title={UNREAD_TITLE}>
+                              {UNREAD_MARK}
                             </span>
                           )}
                         </td>

@@ -6,6 +6,7 @@ import { DIGITS } from "./ocr/table.js";
 import type { GrayImage, ScanSupport } from "./ocr/types.js";
 import { loadPdf, type PdfDocument } from "./pdf/layout.js";
 import { ocrDocument } from "./pdf/ocrDocument.js";
+import { checkReading, unreadLines, type ReadingCheck } from "./parsers/coverage.js";
 import { parseWithProfile } from "./parsers/generic.js";
 import { vatCandidates } from "./parsers/profile.js";
 import { rowsPayload, type RemoteSupport } from "./remote.js";
@@ -42,7 +43,12 @@ export type ExtractInput = {
  * 4. the AI, through `remote` — the only step that sends the invoice out.
  *
  * Every reader refuses unless the lines add up to a printed total, so each
- * step runs only when the ones before it could not read the invoice.
+ * step runs only when the ones before it could not read the invoice. On a
+ * digital PDF every reading is also checked against the invoice itself
+ * (`checkReading`): one that misses a printed row, or has no printed total to
+ * add up to, is passed over for the next step. When no step passes, the
+ * reading that missed the fewest rows is used, with the missed rows added as
+ * `unread` lines — no item row is ever left out unseen.
  */
 export async function extractInvoices(
   input: ExtractInput,
@@ -94,9 +100,24 @@ export async function extractInvoices(
   let textDoc = supplierDoc;
   /** Why the generic parsers refused, shown when nothing else reads the invoice. */
   let refusal: ExtractionError | null = null;
+  /** Readings of the digital PDF that failed `checkReading`, best first once sorted. */
+  const rejected: { reader: string; invoice: SupplierInvoice; check: ReadingCheck }[] = [];
+  /** The check of the reading kept, for its pallet rows. */
+  let passed: ReadingCheck | null = null;
+  /** Keep a reading of the digital PDF only if it accounts for every printed row. */
+  const gate = (invoice: SupplierInvoice, reader: string): SupplierInvoice | null => {
+    const check = checkReading(supplierDoc, invoice);
+    if (check.ok) {
+      passed = check;
+      return invoice;
+    }
+    rejected.push({ reader, invoice, check });
+    return null;
+  };
   const tryParse = (p: TextSupplierParser, doc: PdfDocument) => {
     try {
-      supplier = p.parse(doc);
+      const invoice = p.parse(doc);
+      supplier = doc === supplierDoc ? gate(invoice, p.displayName) : invoice;
     } catch (err) {
       // A generic parser refusing is expected: the next step may read the invoice.
       if (!p.fallback || !(err instanceof ExtractionError)) throw err;
@@ -122,8 +143,14 @@ export async function extractInvoices(
     tryParse(parser, supplierDoc);
   }
 
+  // The supplier's own parser missed rows: the generic parsers read the same text.
+  if (!supplier && rejected.length > 0 && generic) {
+    const fallback = detectSupplier(supplierDoc, FALLBACK_PARSERS.filter((p) => p !== parser));
+    if (fallback && !fallback.scanned) tryParse(fallback, supplierDoc);
+  }
+
   // A scan from a supplier with no parser of its own: read the whole page by OCR, then the generic parsers.
-  if (!supplier && !parser?.scanned && generic && scan && !UNSUPPORTED_SUPPLIERS.some((u) => supplierDoc.text.includes(u.vatId))) {
+  if (!supplier && rejected.length === 0 && !parser?.scanned && generic && scan && !UNSUPPORTED_SUPPLIERS.some((u) => supplierDoc.text.includes(u.vatId))) {
     const scanned = await readPages();
     if (scanned) {
       textDoc = await ocrDocument(scanned, await scan.ocr(), (done, total) => scan.onProgress?.(done, total));
@@ -140,7 +167,22 @@ export async function extractInvoices(
     if (scanned && scanned !== true && scan) {
       textDoc = await ocrDocument(scanned, await scan.ocr(), (done, total) => scan.onProgress?.(done, total));
     }
-    supplier = await readRemotely(remote, input, textDoc, own, textDoc !== supplierDoc);
+    const invoice = await readRemotely(remote, input, textDoc, own, textDoc !== supplierDoc);
+    supplier = textDoc === supplierDoc ? gate(invoice, invoice.generic === "ai" ? "AI" : "מבנה שנלמד") : invoice;
+  }
+
+  // No reading accounts for every row: the one that missed the fewest, with those rows added.
+  if (!supplier && rejected.length > 0) {
+    const best = [...rejected].sort((a, b) => a.check.uncovered.length - b.check.uncovered.length)[0];
+    const invoice = best.invoice;
+    invoice.lines.push(...unreadLines(supplierDoc, best.check.uncovered, invoice.lines.length + 1));
+    passed = best.check;
+    if (best.check.uncovered.length > 0) {
+      invoice.warnings.push(
+        `${best.check.uncovered.length} שורות בחשבונית לא נקראו אוטומטית ונוספו לפי החשבון שבהן — הן מסומנות, ויש לבדוק אותן מול החשבונית`,
+      );
+    }
+    supplier = invoice;
   }
 
   if (!supplier) {
@@ -159,6 +201,12 @@ export async function extractInvoices(
   }
 
   const invoice: SupplierInvoice = supplier;
+  const kept = passed as ReadingCheck | null;
+  if (kept) invoice.excludedRows = kept.excludedRows;
+  // Say which readers were passed over, and why: it names the parser to fix.
+  for (const r of rejected) {
+    invoice.warnings.push(`הקורא "${r.reader}" לא שימש לחשבונית זו: ${r.check.reasons.join("; ")}`);
+  }
   if (invoice.lines.length === 0) {
     throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser?.displayName ?? "הספק"}`, "NO_LINES");
   }

@@ -76,8 +76,13 @@ export function ocrUncertainFields(l: SupplierLine): string {
   return (l.ocrUncertain ?? []).map((f) => OCR_FIELDS[f] ?? f).join(", ");
 }
 
-/** The item, followed by the OCR mark when the row needs checking (plain text: tables and Excel). */
+/** A row the invoice's reader missed, added from the invoice's arithmetic. */
+export const UNREAD_MARK = "⚠ לא נקרא";
+export const UNREAD_TITLE = "השורה לא נקראה אוטומטית ונוספה לפי החשבון שבה (כמות × מחיר = סה\"כ) — יש לבדוק אותה מול החשבונית";
+
+/** The item, followed by its mark when the row needs checking (plain text: tables and Excel). */
 export function supplierItemMarked(l: SupplierLine): string {
+  if (l.unread) return `${supplierItem(l)} ${UNREAD_MARK}`;
   return l.ocrUncertain ? `${supplierItem(l)} ${OCR_MARK}` : supplierItem(l);
 }
 

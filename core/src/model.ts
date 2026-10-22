@@ -31,6 +31,11 @@ export type SupplierLine = {
    * when everything checked out.
    */
   ocrUncertain?: (keyof SupplierLine)[];
+  /**
+   * A row printed on the invoice that the reader missed, added from the
+   * invoice's arithmetic so no row goes unseen: check it against the invoice.
+   */
+  unread?: true;
   /** Excel reports only: the grower the row belongs to (one report covers many growers). */
   grower?: string;
 };
@@ -53,8 +58,13 @@ export type SupplierInvoice = {
    * table parser with the supplier's learned layout, or the AI (last resort).
    */
   generic?: "agroline" | "table" | "profile" | "ai";
+  /** Pallet and deposit rows: charged on the invoice, listed apart, left out of the comparison. */
+  excludedRows?: ExcludedRow[];
   warnings: string[];
 };
+
+/** A row left out of the comparison, as printed. */
+export type ExcludedRow = { page: number; text: string; total: number };
 
 /**
  * One row on the wholesaler's own document — the side every supplier invoice
