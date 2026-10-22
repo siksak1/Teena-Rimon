@@ -4,15 +4,21 @@ import { hasHebrew, parseDate, parseNumber, round2 } from "../pdf/text.js";
 import type { TextSupplierParser } from "./types.js";
 import { checkTotal } from "./validate.js";
 
-const MONEY = /^[\d,]+\.\d{2}$/;
+/** "1,720.00", and a credit's "-50.00" or "50.00-". */
+const MONEY = /^-?[\d,]+\.\d{2}-?$/;
+/** The items total: "תוצרת: 26,079.40", or ":תוצרת" with the colon on the other side in some printouts. */
+const ITEMS_TOTAL = /תוצרת:|:תוצרת/;
+/** Rows the footer adds back as "אריזה" / "משטחים": pallets and containers ("מיכלים"). */
+const PACKAGING = /^(משטח|מיכל)/;
 
 /**
  * Levi Tzadok & Sons (לוי צדוק ובניו) tax invoice — a fixed-width printout
  * where every word is its own cell. A row reads, right to left: delivery
  * number, "d/mm" date (no year), description words, packages, weight, unit
  * price, line total. Packages or weight may be blank; unit-priced rows have
- * no weight. Pallet rows ("משטח …") are left out — the footer adds them back
- * as "אריזה" / "משטחים" after "סה"כ תוצרת", the items total.
+ * no weight. Credits (returns) print their amounts negative. Pallet and
+ * container rows ("משטח …", "מיכלים") are left out — the footer adds them
+ * back as "אריזה" / "משטחים" after "סה"כ תוצרת", the items total.
  */
 export const leviParser: TextSupplierParser = {
   id: "levi",
@@ -34,14 +40,14 @@ export const leviParser: TextSupplierParser = {
           header = headerColumns(row);
           continue;
         }
-        if (row.text.includes("תוצרת:")) break pages;
+        if (ITEMS_TOTAL.test(row.text)) break pages;
 
         const [docCell, dateCell, ...rest] = row.cells;
         if (!docCell || !/^\d{5,7}$/.test(docCell.text) || !/^\d{1,2}\/\d{1,2}$/.test(dateCell?.text ?? "")) continue;
         const descriptionStart = header.packages + 30;
         const words = rest.filter((c) => hasHebrew(c.text) || c.x > descriptionStart);
         const description = words.map((c) => c.text).join(" ");
-        if (description.startsWith("משטח")) continue;
+        if (PACKAGING.test(description)) continue;
 
         const numbers = rest.filter((c) => !words.includes(c));
         const totalCell = numbers.at(-1);
@@ -63,16 +69,16 @@ export const leviParser: TextSupplierParser = {
           packages,
           quantity,
           unit: weight != null ? 'ק"ג' : "יח'",
-          unitPrice: parseNumber(priceCell.text) ?? 0,
+          unitPrice: signed(priceCell.text) ?? 0,
           discountPct: 0,
-          lineTotal: parseNumber(totalCell.text)!,
+          lineTotal: signed(totalCell.text)!,
         });
       }
     }
 
     const sum = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
     const printedItemsTotal = parseNumber(
-      doc.rows.flatMap((r) => r.cells).find((c) => c.text.includes("תוצרת:"))?.text,
+      doc.rows.flatMap((r) => r.cells).find((c) => ITEMS_TOTAL.test(c.text))?.text,
     );
     checkTotal("חשבונית לוי צדוק", sum, printedItemsTotal, warnings);
 
@@ -101,11 +107,17 @@ function packagesAndWeight(cells: Cell[], header: { packages: number; weight: nu
   let packages: number | null = null;
   let weight: number | null = null;
   for (const cell of cells) {
-    const value = parseNumber(cell.text);
+    const value = signed(cell.text);
     if (Math.abs(cell.x - header.packages) < Math.abs(cell.x - header.weight)) packages = value;
     else weight = value;
   }
   return { packages, weight };
+}
+
+/** A number whose minus may print after it ("20.0-"), as well as before. */
+function signed(text: string): number | null {
+  const value = parseNumber(text);
+  return value != null && value > 0 && text.trim().endsWith("-") ? -value : value;
 }
 
 /** "2/09" → ISO, with the invoice's year (the year before for months after the invoice's). */

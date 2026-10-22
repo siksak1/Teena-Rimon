@@ -12,32 +12,35 @@ const sum = (lines: { lineTotal: number }[]) => Math.round(lines.reduce((s, l) =
 describe("strict reading check", () => {
   it("finds the rows a reader missed, credits included, and adds them back as unread lines", async () => {
     const doc = await loadPdf(await readSample(LEVI_CREDITS.supplier));
-    // This Levi printout has credit rows ("-50.00") and prints ":תוצרת" — the Levi parser misses both.
-    const check = checkReading(doc, leviParser.parse(doc));
+    const invoice = leviParser.parse(doc);
+    expect(checkReading(doc, invoice).ok).toBe(true);
+
+    // A reader that misses the credit rows (as the Levi parser once did).
+    const missed = { ...invoice, lines: invoice.lines.filter((l) => l.lineTotal >= 0) };
+    const check = checkReading(doc, missed);
     expect(check.ok).toBe(false);
-    expect(check.reasons).toEqual(["4 שורות בחשבונית לא נקראו", 'לא נמצא סה"כ מודפס לבדיקה']);
+    expect(check.reasons[0]).toBe("2 שורות בחשבונית לא נקראו");
 
     const unread = unreadLines(doc, check.uncovered, 1);
     expect(unread.map((l) => [l.docNumber, l.lineTotal, l.unread])).toEqual([
-      ["115988", -500, true],
-      ["115998", -500, true],
       ["118245", -50, true],
       ["119239", -1720, true],
     ]);
   });
 
-  it("passes the reading over for one that accounts for every printed row", async () => {
+  it("keeps a reading that accounts for every printed row, credits and containers included", async () => {
     const extraction = await extractCase(LEVI_CREDITS, TEENA_RIMON);
     const { supplier } = extraction;
-    expect(supplier.generic).toBe("table");
-    expect(supplier.warnings).toContain('הקורא "לוי צדוק" לא שימש לחשבונית זו: 4 שורות בחשבונית לא נקראו; לא נמצא סה"כ מודפס לבדיקה');
+    expect(supplier.supplierId).toBe("levi");
+    expect(supplier.warnings).toEqual([]);
 
     // Every item row printed on the invoice is a line, or a pallet row listed apart.
     const doc = await loadPdf(await readSample(LEVI_CREDITS.supplier));
     const printed = findItemRows(doc, documentDiscounts(doc)).rows;
     expect(supplier.lines.length + supplier.excludedRows!.length).toBe(printed.length);
     expect(supplier.lines.some((l) => l.unread)).toBe(false);
-    expect(sum(supplier.lines)).toBe(261089.55);
+    expect(sum(supplier.lines)).toBe(261589.55);
+    expect(supplier.printedItemsTotal).toBe(261589.55);
 
     const result = reconcile(extraction, TEENA_RIMON);
     const groupOf = (total: number) => result.groups.find((g) => g.supplierLines.some((l) => l.lineTotal === total));

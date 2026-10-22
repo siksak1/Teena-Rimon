@@ -52,7 +52,7 @@ export function headerField(label: string): HeaderField | null {
 export const SUMMARY_ROW = new RegExp(`סה${Q}כ|יתרה|להעברה|מחיר כולל|לתשלום|ס["'״]ה`);
 
 /** Pallet and deposit rows: charged on the invoice but outside the comparison. */
-export const PALLET_ROW = /משטח|פקדון|פלט|מכל ריק/;
+export const PALLET_ROW = /משטח|פקדון|פלט|מכל ריק|מיכלים/;
 
 /**
  * Labels of rows whose amount may be the printed items total. Produce is
