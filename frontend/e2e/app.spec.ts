@@ -4,8 +4,8 @@ import { expect, test, type Page } from "@playwright/test";
 // The production build, served under a fake token with production headers (e2e/serve.mjs).
 const APP = "/e2e-test-token-0123456789/";
 const ANALYTICS = "https://eu.i.posthog.com/";
-/** The fake AI backend the e2e build points at (VITE_AI_ENDPOINT in npm run e2e); answered by page.route. */
-const AI = "https://ai.e2e.test/";
+/** The AI backend on the site's own /api/ (VITE_AI_ENDPOINT in npm run e2e); answered by page.route. */
+const AI = "/api/";
 const sample = (name: string) => fileURLToPath(new URL(`../../sample_data/${name}`, import.meta.url));
 const repoFile = (path: string) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
 
@@ -52,12 +52,12 @@ function unexpectedRequests(watch: Watch, baseURL: string): string[] {
   );
 }
 
-test("is not indexable and runs under the production security headers", async ({ page }) => {
+test("is not indexable and runs under the production security headers", async ({ page, baseURL }) => {
   const response = await page.goto(APP);
   const headers = response!.headers();
   expect(headers["x-robots-tag"]).toBe("noindex, nofollow, noarchive");
   expect(headers["referrer-policy"]).toBe("no-referrer");
-  expect(headers["content-security-policy"]).toContain(`connect-src https://eu.i.posthog.com ${AI};`);
+  expect(headers["content-security-policy"]).toContain(`connect-src https://eu.i.posthog.com ${baseURL}${AI};`);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow, noarchive");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("השוואת חשבונית ספק מול תאנה ורימון");
   await expect(page.locator(".site-foot")).toContainText("תצורה 6");
@@ -183,11 +183,11 @@ test("reports a failure by error code only", async ({ page, baseURL }) => {
 test("sends an invoice no reader in the browser can read to the AI backend, and nothing else", async ({ page, baseURL }) => {
   const watch = await open(page);
   const calls: { method: string; path: string; token: string | null; body: Record<string, unknown> | null }[] = [];
-  await page.route(`${AI}**`, async (route) => {
+  await page.route(`${baseURL}${AI}**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     calls.push({ method: request.method(), path: url.pathname, token: request.headers()["x-customer-token"] ?? null, body: request.postDataJSON() });
-    if (url.pathname === "/profiles") return route.fulfill({ json: { profiles: [] } });
+    if (url.pathname === "/api/profiles") return route.fulfill({ json: { profiles: [] } });
     return route.fulfill({
       json: {
         verified: true,
@@ -220,7 +220,7 @@ test("sends an invoice no reader in the browser can read to the AI backend, and 
   await expect(page.locator(".banner--scan")).toContainText("כל השורות אומתו");
 
   // A layout lookup by VAT number first (labels only come back), then the one upload, both with the customer's token.
-  expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(["GET /profiles", "POST /parse"]);
+  expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(["GET /api/profiles", "POST /api/parse"]);
   expect(calls.every((c) => c.token === "e2e-test-token-0123456789")).toBe(true);
   expect(calls[1].body).toMatchObject({ fileName: "supplier-invoice.pdf", scanned: false, vatHint: "570046193" });
   expect(String(calls[1].body!.pdf).startsWith("JVBERi")).toBe(true); // %PDF, base64
@@ -228,17 +228,32 @@ test("sends an invoice no reader in the browser can read to the AI backend, and 
   await expect.poll(() => watch.analytics.length).toBe(1);
   expect(watch.analytics[0]).toMatchObject({ event: "reconciliation_completed", properties: { supplier_source: "ai", supplier_lines: 1 } });
   expect(JSON.stringify(watch.analytics[0])).not.toMatch(/[א-ת]|A-1001|570046193/);
-  const outside = unexpectedRequests(watch, baseURL!).filter((r) => !r.startsWith(`GET ${AI}profiles`) && r !== `POST ${AI}parse`);
+  const outside = unexpectedRequests(watch, baseURL!).filter((r) => !r.startsWith(`GET ${baseURL}${AI}profiles`) && r !== `POST ${baseURL}${AI}parse`);
   expect(outside).toEqual([]);
   expect(await watch.violations()).toEqual([]);
   expect(watch.consoleErrors).toEqual([]);
+});
+
+test("says the AI request was blocked when no answer comes back, as with an ad blocker or a network filter", async ({ page, baseURL }) => {
+  const watch = await open(page);
+  await page.route(`${baseURL}${AI}**`, (route) => route.abort("blockedbyclient"));
+
+  const inputs = page.locator('input[type="file"]');
+  await inputs.nth(0).setInputFiles(sample("1 תאנה ורימון.pdf"));
+  await inputs.nth(1).setInputFiles(repoFile("samples/supplier-invoice.pdf"));
+  await page.getByRole("button", { name: "השוואת החשבוניות" }).click();
+
+  await expect(page.getByText("נחסם או נקטע לפני שהתקבלה תשובה")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("127.0.0.1")).toBeVisible();
+  await expect.poll(() => watch.analytics.length).toBe(1);
+  expect(watch.analytics[0]).toMatchObject({ event: "reconciliation_failed", properties: { error_code: "AI_BLOCKED" } });
 });
 
 test("never contacts the AI backend for an invoice the browser reads", async ({ page }) => {
   const watch = await open(page);
   await compare(page, "גרנות אצל תאנה ורימון.pdf", "גרנות 17.09.pdf");
   await expect(page.locator(".results h2")).toContainText("גרנות · חשבונית SI26602203");
-  expect(watch.requests.filter((r) => r.includes("ai.e2e.test"))).toEqual([]);
+  expect(watch.requests.filter((r) => r.includes(AI))).toEqual([]);
 });
 
 test("the browser blocks sending data anywhere else, even to our own server", async ({ page }) => {

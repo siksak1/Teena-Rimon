@@ -180,7 +180,7 @@ https://<host>/<token>/     token → {customer, build}                builds/<c
 
 - **Stack `LedgerMatchStatic`** (eu-central-1, `infra/`) contains a private S3 bucket, a CloudFront distribution, a CloudFront Function with a KeyValueStore, a response-headers policy, and the AI fallback: a Lambda with a Function URL, a DynamoDB table (learned layouts, usage counters), an SNS topic for alert e-mails and a budget alarm. The one secret, the Anthropic API key, is in SSM, not in the stack.
 - **One secret URL per customer:** `https://<host>/<customer>-<16 random chars>/`. Tokens live only in the KeyValueStore, never in git. Any other path, `/` and `/robots.txt` get a 404 from the function.
-- **Every response** carries a CSP allowing only the app's own files plus `https://eu.i.posthog.com` and the AI backend's Function URL, `X-Robots-Tag: noindex, nofollow, noarchive` and `Referrer-Policy: no-referrer`. The headers are defined in `infra/security-headers.json`, which the end-to-end tests also use.
+- **Every response** carries a CSP allowing only the app's own files plus `https://eu.i.posthog.com` and the AI backend on the site's own `/api/` (and its Function URL, for older builds), `X-Robots-Tag: noindex, nofollow, noarchive` and `Referrer-Policy: no-referrer`. The headers are defined in `infra/security-headers.json`, which the end-to-end tests also use.
 - **Each build is immutable:** `builds/<customer>/<version>-<commit>/`. A release uploads a new build and repoints the customer's URLs. Rollback repoints them to an older build. Nothing is ever overwritten or invalidated.
 
 **Estimated monthly cost: about $1–4**, almost all of it AI reads.

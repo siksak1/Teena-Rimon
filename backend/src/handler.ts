@@ -10,9 +10,9 @@ import { handle, type Deps } from "./app.js";
 import { DynamoStore } from "./store.js";
 
 /**
- * Lambda behind a Function URL (no CloudFront in front: an AI call can take
- * longer than CloudFront waits for an origin). Configuration comes from the
- * stack (infra/lib/ledgermatch-stack.ts):
+ * Lambda behind a Function URL, which the page reaches through the site's own
+ * /api/ (CloudFront; up to 60 seconds) or, for older builds, directly.
+ * Configuration comes from the stack (infra/lib/ledgermatch-stack.ts):
  *
  *   TABLE, KVS_ARN, ALERT_TOPIC_ARN, API_KEY_PARAMETER,
  *   AI_ALERT_THRESHOLDS ("25,50,100"), ALERT_NEW_FORMATS ("1"), AI_DAILY_LIMIT, AI_EFFORT
@@ -71,7 +71,8 @@ export async function handler(event: LambdaFunctionURLEvent): Promise<LambdaFunc
   const response = await handle(
     {
       method: event.requestContext.http.method,
-      path: event.rawPath,
+      // "/api/parse" through CloudFront, "/parse" from builds that call the Function URL directly.
+      path: event.rawPath.replace(/^\/api(?=\/)/, ""),
       query: event.queryStringParameters ?? {},
       headers: event.headers ?? {},
       body,

@@ -8,6 +8,7 @@ new LedgerMatchStack(app, "LedgerMatchStatic", {
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: context("region") || "eu-central-1" },
   domainName: context("domainName") || undefined,
   certificateArn: context("certificateArn") || undefined,
+  siteHost: context("siteHost") || undefined,
   ai: {
     alertEmail: context("alertEmail") || undefined,
     alertThresholds: String(context("aiAlertThresholds") ?? "25,50,100"),

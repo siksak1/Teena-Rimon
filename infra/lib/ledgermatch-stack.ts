@@ -20,6 +20,12 @@ export interface LedgerMatchStackProps extends cdk.StackProps {
   domainName?: string;
   /** ACM certificate ARN in us-east-1 covering domainName. */
   certificateArn?: string;
+  /**
+   * The CloudFront domain (the CloudFrontDomain output) when there is no
+   * domainName. The CSP names the exact host of /api/, which the distribution
+   * itself cannot supply (a cycle): fill it in after the first deploy.
+   */
+  siteHost?: string;
   /** The AI fallback (backend/): alert e-mails, thresholds and limits. See DEPLOY.md. */
   ai: {
     /** Where alert e-mails go (SNS asks to confirm the subscription once). Empty: no e-mails. */
@@ -95,13 +101,18 @@ export class LedgerMatchStack extends cdk.Stack {
     });
 
     const ai = this.aiBackend(props, routes);
+    // The page's own /api/ only: an upload to any other path of our own server stays blocked.
+    const host = props.domainName ?? props.siteHost;
+    if (!host) cdk.Annotations.of(this).addWarning("Set siteHost in cdk.json (the CloudFrontDomain output) and deploy again: until then the CSP allows any same-origin request.");
+    const aiSource = host ? `https://${host}${API_PATH}` : "'self'";
 
     const headers = new cloudfront.ResponseHeadersPolicy(this, "SecurityHeaders", {
       comment: "LedgerMatch: CSP (analytics and AI backend only), noindex, no referrer",
       securityHeadersBehavior: {
         contentSecurityPolicy: {
           // The page may send an invoice to the AI backend (only when no reader in the browser can read it).
-          contentSecurityPolicy: HEADERS.contentSecurityPolicy.join("; ").replace(AI_ENDPOINT, ai.url),
+          // Builds made before /api/ (still uploaded, for rollback) call the Function URL directly.
+          contentSecurityPolicy: HEADERS.contentSecurityPolicy.join("; ").replace(AI_ENDPOINT, `${aiSource} ${ai.url}`),
           override: true,
         },
         contentTypeOptions: { override: true },
@@ -143,6 +154,21 @@ export class LedgerMatchStack extends cdk.Stack {
           { function: routeFunction, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST },
         ],
       },
+      additionalBehaviors: {
+        // The AI backend on the app's own address: a filter or blocker that lets the page load lets this through too.
+        [`${API_PATH}*`]: {
+          origin: new origins.FunctionUrlOrigin(ai, {
+            // CloudFront's maximum without a quota increase; AI reads have taken 16–50 seconds.
+            readTimeout: cdk.Duration.seconds(60),
+          }),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          // Query string and the token header, but not Host: a Function URL answers only to its own.
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          responseHeadersPolicy: headers,
+        },
+      },
     });
 
     new cdk.CfnOutput(this, "SiteHost", {
@@ -158,9 +184,10 @@ export class LedgerMatchStack extends cdk.Stack {
   }
 
   /**
-   * The AI fallback (backend/src/handler.ts): a Lambda behind a Function URL
-   * (an AI call can outlast CloudFront's 60-second origin timeout), the
-   * learned-layouts and usage table, alert e-mails, and a budget alarm.
+   * The AI fallback (backend/src/handler.ts): a Lambda behind a Function URL,
+   * which the page reaches through the distribution's /api/ (the URL itself
+   * stays open for builds made before that), the learned-layouts and usage
+   * table, alert e-mails, and a budget alarm.
    * Customers' secret tokens are checked against the same KeyValueStore.
    */
   private aiBackend(props: LedgerMatchStackProps, routes: cloudfront.KeyValueStore): lambda.FunctionUrl {
@@ -255,12 +282,16 @@ export class LedgerMatchStack extends cdk.Stack {
       });
     }
 
-    new cdk.CfnOutput(this, "AiEndpoint", { value: url.url, description: "VITE_AI_ENDPOINT for builds (scripts/release.sh)" });
+    new cdk.CfnOutput(this, "AiEndpoint", { value: API_PATH, description: "VITE_AI_ENDPOINT for builds (scripts/release.sh)" });
+    new cdk.CfnOutput(this, "AiFunctionUrl", { value: url.url, description: "The backend's own URL, behind /api/" });
     new cdk.CfnOutput(this, "AiTableName", { value: table.tableName, description: "scripts/formats.sh reads it" });
     new cdk.CfnOutput(this, "AlertTopicArn", { value: alerts.topicArn });
     return url;
   }
 }
 
-/** Placeholder in security-headers.json for the AI backend's origin (the Function URL, or the e2e fake). */
+/** Placeholder in security-headers.json for the AI backend: https://<site host>/api/ (the e2e server's own /api/ in tests). */
 const AI_ENDPOINT = "__AI_ENDPOINT__";
+
+/** Where the page reaches the AI backend, on its own host. */
+const API_PATH = "/api/";

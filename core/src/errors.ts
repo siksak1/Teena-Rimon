@@ -13,6 +13,9 @@ export type ExtractionErrorCode =
   | "NOT_EXCEL"
   | "MISSING_COLUMN"
   | "AI_UNAVAILABLE"
+  | "AI_BLOCKED"
+  | "AI_TIMEOUT"
+  | "AI_REJECTED"
   | "AI_RATE_LIMITED"
   | "AI_UNREADABLE";
 

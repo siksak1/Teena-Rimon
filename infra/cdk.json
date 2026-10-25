@@ -10,6 +10,7 @@
     "region": "eu-central-1",
     "domainName": "",
     "certificateArn": "",
+    "siteHost": "d2mi7xe3zlltz9.cloudfront.net",
     "alertEmail": "namadayan@gmail.com",
     "aiAlertThresholds": "25,50,100",
     "aiAlertNewFormats": true,

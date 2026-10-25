@@ -61,9 +61,9 @@ scripts/token.sh revoke <token>     # customer stopped paying: URL returns 404 w
 ## AI fallback (backend)
 
 ```
-Browser ──(only after every reader in the browser refused)──► Lambda Function URL ──► Claude Sonnet 5.5 (Anthropic API)
-  GET  /profiles?vat=…   learned supplier layouts (labels only)        │
-  POST /parse            the supplier PDF + the rows read from it       └─► DynamoDB: layouts + usage counters; SNS: alert e-mails
+Browser ──(only after every reader in the browser refused)──► CloudFront /api/* ──► Lambda Function URL ──► Claude Sonnet 5.5 (Anthropic API)
+  GET  /api/profiles?vat=…   learned supplier layouts (labels only)                       │
+  POST /api/parse            the supplier PDF + the rows read from it                      └─► DynamoDB: layouts + usage counters; SNS: alert e-mails
 ```
 
 The order of attempts in the browser (`core/src/extract.ts`): the supplier's own parser → the generic parsers → for a scan, OCR of the whole page and the generic parsers on it → the supplier's **learned layout** (fetched by VAT number, applied in the browser) → the AI. Every step refuses unless the lines add up to a printed total. The AI's answer is checked against the PDF (`core/src/ai/verify.ts`); a layout is kept only if it reads the same lines alone, so the supplier's next invoice is read in the browser without the AI.
@@ -84,7 +84,7 @@ The order of attempts in the browser (`core/src/extract.ts`): the supplier's own
    | `monthlyBudgetUsd` | `20` | AWS Budgets e-mail at 80% actual / 100% forecast of the whole account |
 
 3. `cd infra && npx cdk deploy`. SNS sends a confirmation e-mail to `alertEmail`: click it, or no alert arrives.
-4. Release each customer again (`scripts/release.sh <slug>`): the build picks up the `AiEndpoint` output as `VITE_AI_ENDPOINT`, and the new CSP allows exactly that URL. A customer's app uses it only if its config sets `aiFallback: true` — agree on it with the customer first (`docs/privacy-statement.md`).
+4. Release each customer again (`scripts/release.sh <slug>`): the build picks up the `AiEndpoint` output (`/api/`) as `VITE_AI_ENDPOINT`. The backend is on the site's own address, so whatever lets the page load (an ad blocker, a company or ISP filter) lets the AI through too. The CSP allows exactly `https://<siteHost>/api/` — set `siteHost` in `infra/cdk.json` to the `CloudFrontDomain` output after the first deploy (not needed with `domainName`) — plus the Function URL, which builds made before `/api/` call directly. CloudFront waits at most 60 seconds for an answer (AI reads have taken 16–50 s); beyond that the app says the reading took too long. The limit can go up to 180 s with a Service Quotas request (CloudFront → *Response timeout per origin*), then `readTimeout` in the stack. A customer's app uses it only if its config sets `aiFallback: true` — agree on it with the customer first (`docs/privacy-statement.md`).
 
 **Tracking**
 

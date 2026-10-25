@@ -32,7 +32,8 @@ export interface RemoteSupport {
    * Last resort: read the invoice with the AI. Resolves to an invoice the
    * backend has checked (row arithmetic and printed total); rows it could not
    * confirm carry `ocrUncertain`. Rejects with an `ExtractionError`
-   * (`AI_UNAVAILABLE`, `AI_RATE_LIMITED`, `AI_UNREADABLE`).
+   * (`AI_BLOCKED`, `AI_TIMEOUT`, `AI_REJECTED`, `AI_UNAVAILABLE`,
+   * `AI_RATE_LIMITED`, `AI_UNREADABLE`) whose message says why.
    */
   readWithAi(request: AiRequest): Promise<SupplierInvoice>;
   /** Called before the invoice is sent, for a progress message. */

@@ -32,7 +32,7 @@ LedgerMatch משווה בין חשבונית ספק לבין החשבונית ש
    - **אין שום בקשה שמכילה את קובצי ה-PDF.** בחירת קובץ מהמחשב לא יוצרת בקשת רשת בכלל, כי הקובץ נקרא מקומית.
 6. טיפ: הקלידו בשדה **Filter** את `method:POST`. אמורה להישאר שורה אחת בלבד.
 
-**אם מופיעה ההודעה "פורמט חדש — קורא את חשבונית הספק בעזרת AI":** יופיעו גם בקשת `GET` אל `…lambda-url.eu-central-1.on.aws/profiles` (שאלה אם המבנה של הספק כבר ידוע; נשלחים רק מספרי עוסק), ובקשת `POST` אחת אל `…/parse`, שמכילה את חשבונית הספק. ב-**Payload** שלה תראו את הקובץ (מקודד base64), את שמו ואת הטקסט שחולץ ממנו. החשבונית שלכם אינה בבקשה. בפעם הבאה שתשוו חשבונית של אותו ספק, תופיע רק בקשת ה-`GET`, והחשבונית תיקרא בדפדפן.
+**אם מופיעה ההודעה "פורמט חדש — קורא את חשבונית הספק בעזרת AI":** יופיעו גם בקשת `GET` אל `/api/profiles` באותו דומיין של הקישור (שאלה אם המבנה של הספק כבר ידוע; נשלחים רק מספרי עוסק), ובקשת `POST` אחת אל `/api/parse`, שמכילה את חשבונית הספק. ב-**Payload** שלה תראו את הקובץ (מקודד base64), את שמו ואת הטקסט שחולץ ממנו. החשבונית שלכם אינה בבקשה. בפעם הבאה שתשוו חשבונית של אותו ספק, תופיע רק בקשת ה-`GET`, והחשבונית תיקרא בדפדפן.
 
 ## בדיקה 2: מה בדיוק נשלח בהודעת הסטטיסטיקה
 
@@ -64,7 +64,8 @@ LedgerMatch משווה בין חשבונית ספק לבין החשבונית ש
 
 ```
 default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; font-src 'self'; img-src 'self' data:;
-connect-src https://eu.i.posthog.com https://<…>.lambda-url.eu-central-1.on.aws/; worker-src 'self'; base-uri 'none';
+connect-src https://eu.i.posthog.com https://<…>.cloudfront.net/api/ https://<…>.lambda-url.eu-central-1.on.aws/; worker-src 'self';
+base-uri 'none';
 form-action 'none'; frame-ancestors 'none'; object-src 'none'
 ```
 
@@ -81,7 +82,7 @@ form-action 'none'; frame-ancestors 'none'; object-src 'none'
 fetch('https://example.com', { method: 'POST', body: 'test' })
 ```
 
-3. התוצאה הצפויה היא שגיאה אדומה: *"…violates the following Content Security Policy directive: "connect-src https://eu.i.posthog.com https://…lambda-url…"…"*. הדפדפן חסם את השליחה.
+3. התוצאה הצפויה היא שגיאה אדומה: *"…violates the following Content Security Policy directive: "connect-src https://eu.i.posthog.com https://…/api/ …"…"*. הדפדפן חסם את השליחה.
 
 ## בדיקה 5 (רשות): עבודה בלי אינטרנט
 
@@ -96,7 +97,7 @@ fetch('https://example.com', { method: 'POST', body: 'test' })
 - **אילו כתובות לאשר בחומת האש:**
   - הדומיין שבקישור (`…cloudfront.net`), ב-HTTPS (פורט 443).
   - `eu.i.posthog.com` לסטטיסטיקה. אם הכתובת הזו חסומה, התוכנה ממשיכה לעבוד כרגיל.
-  - כתובת שרת הקריאה בעזרת AI (`…lambda-url.eu-central-1.on.aws`, נמסור לכם אותה), אם הוסכם. אם היא חסומה, כל החשבוניות שהדפדפן יודע לקרוא ממשיכות לעבוד כרגיל.
+  - שרת הקריאה בעזרת AI נמצא באותו דומיין, בנתיב `/api/`, ולכן אין כתובת נוספת לאשר. מסנני תוכן שבודקים נתיבים צריכים לאפשר בקשות `POST` אל `/api/parse` (עד כ-5MB, ועד דקה לתשובה). הכתובת `…lambda-url.eu-central-1.on.aws` שבמדיניות משמשת רק גרסאות קודמות של התוכנה.
 - **הקישור אישי לחברה שלכם, ומשמש כסיסמה.** אין מסך כניסה, ולכן יש לשמור אותו בתוך הארגון. אם הקישור דלף, פנו אלינו ונחליף אותו מיד. הקישור הישן יפסיק לעבוד תוך שניות.
 - **הדף לא מופיע במנועי חיפוש.** הוא נשלח עם `X-Robots-Tag: noindex` ועם תגית `noindex`.
 - **אין עוגיות ואין שמירה של הקבצים.** סגירת הלשונית מוחקת הכול.

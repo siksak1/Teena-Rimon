@@ -8,12 +8,12 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const TOKEN = "e2e-test-token-0123456789";
-/** The fake AI backend the e2e build is pointed at (npm run e2e); the tests answer it with page.route. */
-export const AI_ENDPOINT = "https://ai.e2e.test/";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 const headers = JSON.parse(readFileSync(new URL("../../infra/security-headers.json", import.meta.url), "utf8"));
 const port = Number(process.argv[2] ?? 43130);
+/** The AI backend's path on the site, as CloudFront serves it (npm run e2e builds with it); the tests answer it with page.route. */
+const AI_ENDPOINT = `http://127.0.0.1:${port}/api/`;
 
 const SECURITY = {
   "Content-Security-Policy": headers.contentSecurityPolicy.join("; ").replace("__AI_ENDPOINT__", AI_ENDPOINT),

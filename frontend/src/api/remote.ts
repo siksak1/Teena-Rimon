@@ -3,7 +3,7 @@ import type { SupplierInvoice } from "@core/model.js";
 import { readProfile, type SupplierProfile } from "@core/parsers/profile.js";
 import type { AiRequest, RemoteSupport } from "@core/remote.js";
 
-/** The AI backend (infra: the Function URL), set at build time by scripts/release.sh. */
+/** The AI backend: "/api/" on the site itself (infra), set at build time by scripts/release.sh; the dev backend's URL locally. */
 const ENDPOINT = import.meta.env.VITE_AI_ENDPOINT as string | undefined;
 
 /** The customer's secret URL token: the first segment of the page's path. Dev servers have none. */
@@ -49,7 +49,15 @@ export function browserRemoteSupport(enabled: boolean, onAiStart?: () => void): 
           }),
         });
       } catch {
-        throw unavailable();
+        // No answer at all: the browser, an extension or the network stopped the request.
+        throw navigator.onLine === false
+          ? new ExtractionError(`${CANNOT_READ} ואין כרגע חיבור לאינטרנט. נסו שוב כשהחיבור יחזור`, "AI_BLOCKED")
+          : new ExtractionError(
+              `${CANNOT_READ}, והחיבור לשירות הקריאה בעזרת AI נחסם או נקטע לפני שהתקבלה תשובה. ` +
+                "ייתכן שתוסף בדפדפן (כמו חוסם פרסומות), סינון אינטרנט, VPN או אנטי-וירוס חוסמים את הכתובת " +
+                `${new URL(url(""), location.href).host}. נסו בחלון גלישה בסתר או ברשת אחרת, או פנו לתמיכה`,
+              "AI_BLOCKED",
+            );
       }
       if (res.status === 429) {
         throw new ExtractionError(
@@ -63,7 +71,7 @@ export function browserRemoteSupport(enabled: boolean, onAiStart?: () => void): 
           "AI_UNREADABLE",
         );
       }
-      if (!res.ok) throw unavailable();
+      if (!res.ok) throw await failure(res);
       const body = (await res.json()) as { invoice: SupplierInvoice };
       return body.invoice;
     },
@@ -72,9 +80,32 @@ export function browserRemoteSupport(enabled: boolean, onAiStart?: () => void): 
   };
 }
 
-function unavailable(): ExtractionError {
+const CANNOT_READ = "לא ניתן לקרוא את חשבונית הספק בדפדפן";
+
+/** Why the backend (or CloudFront in front of it) refused; the HTTP status goes in the message for support. */
+async function failure(res: Response): Promise<ExtractionError> {
+  const error = await res
+    .json()
+    .then((b: { error?: unknown }) => (typeof b?.error === "string" ? b.error : null))
+    .catch(() => null);
+  const status = `(קוד ${res.status}${error ? ` ${error}` : ""})`;
+  if (res.status === 504) {
+    return new ExtractionError(
+      `${CANNOT_READ}, והקריאה בעזרת AI ארכה יותר מדקה ולכן הופסקה ${status}. נסו שוב, ואם זה חוזר פנו לתמיכה`,
+      "AI_TIMEOUT",
+    );
+  }
+  if (res.status === 404 || res.status === 400 || res.status === 413) {
+    const why =
+      res.status === 404
+        ? "שירות הקריאה בעזרת AI לא זיהה את הקישור הזה"
+        : res.status === 413
+          ? "הקובץ גדול מדי לשליחה לקריאה בעזרת AI"
+          : "שירות הקריאה בעזרת AI דחה את הבקשה";
+    return new ExtractionError(`${CANNOT_READ}, ו${why} ${status}. נא לפנות לתמיכה`, "AI_REJECTED");
+  }
   return new ExtractionError(
-    "לא ניתן לקרוא את חשבונית הספק בדפדפן, ושירות הקריאה בעזרת AI אינו זמין כרגע. נסו שוב בעוד כמה דקות",
+    `${CANNOT_READ}, ושירות הקריאה בעזרת AI נכשל ${status}. נסו שוב בעוד כמה דקות, ואם זה חוזר פנו לתמיכה`,
     "AI_UNAVAILABLE",
   );
 }
