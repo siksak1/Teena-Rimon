@@ -20,7 +20,7 @@ import {
   parsersToTry,
   UNSUPPORTED_SUPPLIERS,
 } from "./parsers/registry.js";
-import type { ScannedSupplierParser, SupplierParser, TextSupplierParser } from "./parsers/types.js";
+import type { OwnDocumentParser, ScannedSupplierParser, SupplierParser, TextSupplierParser } from "./parsers/types.js";
 
 export type ExtractInput = {
   /** The wholesaler's own document (Teena-Rimon: the AGROLINE draft). */
@@ -68,10 +68,10 @@ export async function extractInvoices(
   ]);
 
   const ownDoc = await withMissingText(ownLoaded, input.ownPdf, input.ownFileName, scan);
-  const supplierDoc = await withMissingText(supplierLoaded, input.supplierPdf, input.supplierFileName, scan);
+  const supplierFile = await withMissingText(supplierLoaded, input.supplierPdf, input.supplierFileName, scan);
 
   if (!ownParser.detect(ownDoc)) {
-    throw ownParser.detect(supplierDoc)
+    throw ownParser.detect(supplierFile)
       ? new ExtractionError(
           `נראה שהקבצים הוחלפו — חשבונית ${config.displayName} הועלתה במקום חשבונית הספק`,
           "FILES_SWAPPED",
@@ -90,6 +90,8 @@ export async function extractInvoices(
   };
 
   const own = ownParser.parse(ownDoc, config.displayName);
+  // A copy of the wholesaler's own draft printed into the supplier's file is not part of the invoice.
+  const { doc: supplierDoc, skipped: draftPages } = withoutOwnDraftPages(supplierFile, ownParser);
   const generic = config.genericFallback !== false;
 
   let parser: SupplierParser | null = detectSupplier(supplierDoc, supplierParsers);
@@ -211,6 +213,9 @@ export async function extractInvoices(
     throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser?.displayName ?? "הספק"}`, "NO_LINES");
   }
   if (invoice.generic) nameFromOwnDocument(invoice, own, textDoc);
+  if (draftPages.length > 0) {
+    invoice.warnings.push(draftPagesWarning(draftPages, input.supplierFileName, config.displayName));
+  }
   if (ownDoc.repairedByOcr) own.warnings.push(ocrRepairWarning(input.ownFileName));
   if (supplierDoc.repairedByOcr) invoice.warnings.push(ocrRepairWarning(input.supplierFileName));
   if (textDoc !== supplierDoc && invoice.generic !== "ai") invoice.warnings.push(ocrScanWarning(input.supplierFileName));
@@ -284,6 +289,41 @@ function nameFromOwnDocument(supplier: SupplierInvoice, own: OwnInvoice, supplie
   supplier.supplierName = party.name;
   supplier.vatId = party.vatId;
   if (supplier.generic === "table") supplier.supplierId = `generic-${party.vatId}`;
+}
+
+/**
+ * Blank out the pages of the supplier's file that are the wholesaler's own
+ * draft (a supplier may send the invoice with the draft attached). The pages
+ * stay as empty pages, so page numbers still match the PDF. A file that is
+ * all draft is left alone: the swapped-files check deals with it.
+ */
+function withoutOwnDraftPages(
+  doc: PdfDocument,
+  ownParser: OwnDocumentParser,
+): { doc: PdfDocument; skipped: number[] } {
+  const isDraft = doc.pages.map((rows) =>
+    ownParser.detect({ pages: [rows], rows, text: rows.map((r) => r.text).join("\n"), repairedByOcr: doc.repairedByOcr }),
+  );
+  if (!isDraft.includes(true) || !isDraft.includes(false)) return { doc, skipped: [] };
+  const pages = doc.pages.map((rows, i) => (isDraft[i] ? [] : rows));
+  const rows = pages.flat();
+  return {
+    doc: { ...doc, pages, rows, text: rows.map((r) => r.text).join("\n") },
+    skipped: isDraft.flatMap((draft, i) => (draft ? [i + 1] : [])),
+  };
+}
+
+/** "עמודים 5–9" / "עמוד 3" / "עמודים 2, 6–7". */
+function draftPagesWarning(pages: number[], fileName: string, customerName: string): string {
+  const ranges: string[] = [];
+  for (let i = 0; i < pages.length; ) {
+    let j = i;
+    while (j + 1 < pages.length && pages[j + 1] === pages[j] + 1) j++;
+    ranges.push(j > i ? `${pages[i]}–${pages[j]}` : `${pages[i]}`);
+    i = j + 1;
+  }
+  const label = pages.length === 1 ? `עמוד ${ranges[0]}` : `עמודים ${ranges.join(", ")}`;
+  return `${label} בקובץ "${fileName}" ${pages.length === 1 ? "הוא" : "הם"} חשבונית טיוטה של ${customerName} — ${pages.length === 1 ? "הוא לא נקרא" : "הם לא נקראו"} כחלק מחשבונית הספק`;
 }
 
 /**

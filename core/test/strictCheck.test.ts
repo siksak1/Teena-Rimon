@@ -7,6 +7,10 @@ import { reconcile } from "../src/reconcile/reconcile.js";
 import { extractCase, readSample, TEENA_RIMON } from "./helpers.js";
 
 const LEVI_CREDITS = { supplier: "sample_data/צדוק לוי.pdf", own: "sample_data/צדוק לוי טיוטה 09.26.pdf" };
+const HASOR_WITH_DRAFT = {
+  supplier: "sample_data/78508ace614a2892b42f0032fd56c0db.pdf",
+  own: "sample_data/הדפסת טיוטת חש' מגדל_4481 (43).pdf",
+};
 const sum = (lines: { lineTotal: number }[]) => Math.round(lines.reduce((s, l) => s + l.lineTotal, 0) * 100) / 100;
 
 describe("strict reading check", () => {
@@ -47,5 +51,18 @@ describe("strict reading check", () => {
     expect(groupOf(-50)).toMatchObject({ ownLines: [{ id: "T91" }], netDiff: 0 });
     expect(groupOf(-1720)).toMatchObject({ ownLines: [{ id: "T155" }], netDiff: 0 });
     expect(result.ownOnly).toEqual([]);
+  });
+
+  it("skips the wholesaler's own draft attached to the supplier's file, and says so", async () => {
+    // Pages 1–4: the Hasor invoice; pages 5–9: Teena-Rimon's AGROLINE draft against it.
+    const { supplier } = await extractCase(HASOR_WITH_DRAFT, TEENA_RIMON);
+    expect(supplier.supplierId).toBe("hasor");
+    expect(supplier.lines).toHaveLength(53);
+    expect(supplier.lines.some((l) => l.unread || l.page > 4)).toBe(false);
+    expect(sum(supplier.lines)).toBe(219351.09);
+    expect(supplier.printedItemsTotal).toBe(219351.09);
+    expect(supplier.warnings).toEqual([
+      'עמודים 5–9 בקובץ "sample_data/78508ace614a2892b42f0032fd56c0db.pdf" הם חשבונית טיוטה של תאנה ורימון — הם לא נקראו כחלק מחשבונית הספק',
+    ]);
   });
 });
