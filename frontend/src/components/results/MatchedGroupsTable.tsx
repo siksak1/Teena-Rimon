@@ -33,9 +33,10 @@ type Props = {
   growers?: boolean;
 };
 
-const HEADERS = ["קבוצה", "צד", "תאריך", "תעודה / אסמכתא", "פריט", "אריזות", 'ק"ג', "מחיר", 'סה"כ נטו'];
+/** "שורה" is the line's own id (S…/T…), as in the supplier-only and own-only tables. */
+const HEADERS = ["קבוצה", "צד", "שורה", "תאריך", "תעודה / אסמכתא", "פריט", "אריזות", 'ק"ג', "מחיר", 'סה"כ נטו'];
 /** Excel reports carry no discount: the amount is just weight × price. */
-const GROWER_HEADERS = ["קבוצה", "צד", "מגדל", ...HEADERS.slice(2, -1), 'סה"כ'];
+const GROWER_HEADERS = ["קבוצה", "צד", "שורה", "מגדל", ...HEADERS.slice(3, -1), 'סה"כ'];
 
 function groupTone(g: MatchGroup, tone: Props["tone"]): string {
   if (tone === "offset") return "grp-offset";
@@ -53,6 +54,7 @@ function lineCells(g: MatchGroup, ownDiscountPct: number, growers: boolean): str
     ...g.supplierLines.map((l) => [
       g.id,
       "ספק",
+      l.id,
       ...grower(l),
       shortDate(l.date),
       supplierRef(l),
@@ -65,6 +67,7 @@ function lineCells(g: MatchGroup, ownDiscountPct: number, growers: boolean): str
     ...g.ownLines.map((l) => [
       g.id,
       customer.shortName,
+      l.id,
       ...grower(l),
       shortDate(l.date),
       l.supplierRef || "—",
@@ -109,8 +112,8 @@ function DiffCells({ g }: { g: MatchGroup }) {
  */
 export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", growers = false }: Props) {
   const headers = growers ? GROWER_HEADERS : HEADERS;
-  /** Columns between the side tag and the numbers: [grower,] date, reference, item. */
-  const labelSpan = growers ? 5 : 4;
+  /** Columns from the side tag up to the numbers: side, line, [grower,] date, reference, item. */
+  const labelSpan = growers ? 6 : 5;
   const filters = useColumnFilters(headers.length);
   /** Groups the user opened or closed, relative to their default. */
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
@@ -205,6 +208,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", g
                           {box}
                           <span className="side-tag side-tag--supplier">ספק</span>
                         </td>
+                        <td className="mono">{l.id}</td>
                         {growers && <td className="grower">{l.grower}</td>}
                         <td>{shortDate(l.date)}</td>
                         <td className="mono">{supplierRef(l)}</td>
@@ -240,6 +244,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", g
                           {box}
                           <span className="side-tag side-tag--tr">{customer.shortName}</span>
                         </td>
+                        <td className="mono">{l.id}</td>
                         {growers && <td className="grower">{l.grower}</td>}
                         <td>{shortDate(l.date)}</td>
                         <td className="mono">{l.supplierRef || "—"}</td>

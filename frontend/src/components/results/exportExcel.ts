@@ -30,6 +30,7 @@ function sheet(name: string, data: Row[], widths: number[]): Sheet<Blob> {
 const GROUP_HEADERS = [
   "קבוצה",
   "צד",
+  "שורה",
   "תאריך",
   "תעודה / אסמכתא",
   "פריט",
@@ -45,7 +46,7 @@ const GROUP_HEADERS = [
   "הפרש ימים",
   'הפרש ₪',
 ];
-const GROUP_WIDTHS = [8, 10, 10, 20, 32, 9, 10, 9, 8, 12, 18, 50, 11, 10, 10, 12];
+const GROUP_WIDTHS = [8, 10, 8, 10, 20, 32, 9, 10, 9, 8, 12, 18, 50, 11, 10, 10, 12];
 
 /** Each line of each group, then a summary row with the group's status and differences. */
 function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
@@ -56,6 +57,7 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
       push([
         g.id,
         "ספק",
+        l.id,
         date(l.date),
         text(supplierRef(l)),
         supplierItemMarked(l),
@@ -70,6 +72,7 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
       push([
         g.id,
         customer.shortName,
+        l.id,
         date(l.date),
         text(l.supplierRef),
         ownItem(l),
@@ -92,7 +95,7 @@ function groupRows(groups: MatchGroup[], ownDiscountPct: number): Row[] {
     rows.push([
       cell(g.id),
       cell("סיכום קבוצה"),
-      ...Array.from({ length: 8 }, () => cell()),
+      ...Array.from({ length: 9 }, () => cell()),
       cell(g.flags.length ? g.flags.map((f) => FLAG_LABEL[f]).join(", ") : "תואם"),
       cell(g.notes.join("\n")),
       cell(g.packagesDiff || null, SIGNED_NUM),
