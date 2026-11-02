@@ -227,6 +227,32 @@
   border-bottom: 1px solid var(--line);
 }
 
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sort-btn:hover {
+  color: var(--ours);
+}
+
+.sort-mark {
+  font-size: 0.7em;
+  opacity: 0.4;
+}
+
+.sort-mark.is-active {
+  color: var(--ours);
+  opacity: 1;
+}
+
 .rec-table .filter-row th {
   position: static;
   padding: 0.3rem 0.4rem;

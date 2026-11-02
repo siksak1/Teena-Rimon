@@ -311,6 +311,66 @@ test("reads Excel reports with other column names, and says which columns it use
   expect(watch.consoleErrors).toEqual([]);
 });
 
+test("sorts a table by a column's values, keeping rows inside their groups", async ({ page }) => {
+  await open(page);
+  await compare(page, "גרנות אצל תאנה ורימון.pdf", "גרנות 17.09.pdf");
+
+  const matched = page.locator(".results__section").filter({ has: page.getByRole("heading", { name: "שורות שהוצמדו" }) });
+  await matched.getByRole("button", { name: "פתיחת הכל" }).click();
+  const header = (name: string) => matched.getByRole("columnheader", { name });
+  const sortBy = (name: string) => header(name).getByRole("button").click();
+  const ids = () => matched.locator(".grp-id").allInnerTexts();
+  const original = await ids();
+  expect(original.length).toBeGreaterThan(1);
+
+  /** Per group, one side's cells of a column (0 side, 1 line, 2 date), in the order shown. */
+  const columnOf = (rows: string, column: number) =>
+    matched.locator("tbody.grp").evaluateAll(
+      (groups, [rows, n]) =>
+        groups.map((g) =>
+          [...g.querySelectorAll(rows as string)].map((row) => {
+            const cells = [...row.querySelectorAll("td")].filter((td) => !td.classList.contains("grp-id"));
+            return cells[n as number].textContent!.trim();
+          }),
+        ),
+      [rows, column] as const,
+    );
+  const SUPPLIER = "tr.side-supplier";
+  const EVERY_LINE = "tr.side-supplier, tr.side-tr";
+  const days = async (rows: string) => (await columnOf(rows, 2)).map((dates) => dates.map((d) => d.split("/").reverse().join("")));
+
+  await sortBy("תאריך");
+  await expect(header("תאריך")).toHaveAttribute("aria-sort", "ascending");
+  for (const dates of await days(SUPPLIER)) expect(dates).toEqual(dates.toSorted());
+  // A group sits by its earliest date on either side.
+  const earliest = (await days(EVERY_LINE)).map((dates) => dates.toSorted()[0]);
+  expect(earliest).toEqual(earliest.toSorted());
+
+  await sortBy("תאריך");
+  await expect(header("תאריך")).toHaveAttribute("aria-sort", "descending");
+  const latest = (await days(EVERY_LINE)).map((dates) => dates.toSorted().at(-1)!);
+  expect(latest).toEqual(latest.toSorted().toReversed());
+
+  await sortBy("תאריך");
+  await expect(header("תאריך")).toHaveAttribute("aria-sort", "none");
+  expect(await ids()).toEqual(original);
+
+  const reset = matched.getByRole("button", { name: "איפוס מיון" });
+  await expect(reset).toHaveCount(0);
+  await sortBy("פריט");
+  expect(await ids()).not.toEqual(original);
+  await reset.click();
+  await expect(header("פריט")).toHaveAttribute("aria-sort", "none");
+  await expect(reset).toHaveCount(0);
+  expect(await ids()).toEqual(original);
+
+  // Line ids sort by their number: S9 before S10.
+  await sortBy("שורה");
+  const lines = (await columnOf(SUPPLIER, 1)).flatMap((g) => g.slice(0, 1)).map((id) => Number(id.replace(/\D/g, "")));
+  expect(lines.length).toBeGreaterThan(1);
+  expect(lines).toEqual(lines.toSorted((a, b) => a - b));
+});
+
 test("collapses ₪0 groups, filters by column and exports to Excel without leaving the page", async ({ page, baseURL }) => {
   const watch = await open(page);
   await compare(page, "גרנות אצל תאנה ורימון.pdf", "גרנות 17.09.pdf");

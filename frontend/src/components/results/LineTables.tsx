@@ -1,7 +1,8 @@
 import type { OwnLine, SupplierLine } from "@core/model.js";
 import customer from "@customer-config";
 import { rowMatches, useColumnFilters } from "./filtering";
-import { ClearFilters, FilterableHead } from "./ColumnFilters";
+import { ClearFilters, ClearSort, FilterableHead } from "./ColumnFilters";
+import { sortRows, useColumnSort } from "./sorting";
 import { money, num, ownItem, ownNet, shortDate, supplierItemMarked } from "./format";
 import { ownKey, supplierKey, type SelItem, type SelTable } from "./selection";
 import { SelRow } from "./SumBar";
@@ -19,18 +20,22 @@ type Props<T> = {
 
 function LinesTable<T extends { id: string }>({ headers, classes, lines, cells, sel }: Props<T>) {
   const filters = useColumnFilters(headers.length);
-  const rows = lines
-    .map((l) => ({ id: l.id, cells: cells(l), sel: sel(l) }))
-    .filter((r) => rowMatches(r.cells, filters.values));
+  const sort = useColumnSort();
+  const rows = sortRows(
+    lines.map((l) => ({ id: l.id, cells: cells(l), sel: sel(l) })).filter((r) => rowMatches(r.cells, filters.values)),
+    (r, column) => r.cells[column],
+    sort,
+  );
   const selTable: SelTable = new Map(rows.map((r) => r.sel));
   return (
     <>
       <div className="table-tools">
+        <ClearSort sort={sort} />
         <ClearFilters filters={filters} />
       </div>
       <div className="table-wrap">
         <table className="rec-table">
-          <FilterableHead headers={headers} filters={filters} />
+          <FilterableHead headers={headers} filters={filters} sort={sort} />
           <tbody>
             {rows.map((r) => (
               <SelRow key={r.id} selKey={r.sel[0]} table={selTable} className="row-missing">

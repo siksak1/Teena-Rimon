@@ -1,9 +1,10 @@
 import { useState } from "react";
-import type { MatchGroup } from "@core/model.js";
+import type { MatchGroup, OwnLine, SupplierLine } from "@core/model.js";
 import customer from "@customer-config";
 import { rowMatches, useColumnFilters } from "./filtering";
-import { ClearFilters, FilterableHead } from "./ColumnFilters";
+import { ClearFilters, ClearSort, FilterableHead } from "./ColumnFilters";
 import { ownKey, supplierKey, type SelItem, type SelTable } from "./selection";
+import { type ColumnSort, sortRows, useColumnSort } from "./sorting";
 import { SelRow } from "./SumBar";
 import {
   FLAG_LABEL,
@@ -49,35 +50,54 @@ const openByDefault = (g: MatchGroup) => g.netDiff !== 0 || g.supplierLines.some
 
 /** The text of each line as shown in the table, one entry per column, for the column filters. */
 function lineCells(g: MatchGroup, ownDiscountPct: number, growers: boolean): string[][] {
-  const grower = (l: { grower?: string }) => (growers ? [l.grower ?? ""] : []);
+  return [...g.supplierLines.map((l) => supplierCells(g, l, growers)), ...g.ownLines.map((l) => ownCells(g, l, ownDiscountPct, growers))];
+}
+
+function supplierCells(g: MatchGroup, l: SupplierLine, growers: boolean): string[] {
   return [
-    ...g.supplierLines.map((l) => [
-      g.id,
-      "ספק",
-      l.id,
-      ...grower(l),
-      shortDate(l.date),
-      supplierRef(l),
-      supplierItemMarked(l),
-      num(l.packages),
-      num(l.quantity),
-      num(l.unitPrice),
-      money(l.lineTotal),
-    ]),
-    ...g.ownLines.map((l) => [
-      g.id,
-      customer.shortName,
-      l.id,
-      ...grower(l),
-      shortDate(l.date),
-      l.supplierRef || "—",
-      ownItem(l),
-      num(l.packages),
-      num(l.quantity),
-      num(l.unitPrice),
-      money(ownNet(l, ownDiscountPct)),
-    ]),
+    g.id,
+    "ספק",
+    l.id,
+    ...(growers ? [l.grower ?? ""] : []),
+    shortDate(l.date),
+    supplierRef(l),
+    supplierItemMarked(l),
+    num(l.packages),
+    num(l.quantity),
+    num(l.unitPrice),
+    money(l.lineTotal),
   ];
+}
+
+function ownCells(g: MatchGroup, l: OwnLine, ownDiscountPct: number, growers: boolean): string[] {
+  return [
+    g.id,
+    customer.shortName,
+    l.id,
+    ...(growers ? [l.grower ?? ""] : []),
+    shortDate(l.date),
+    l.supplierRef || "—",
+    ownItem(l),
+    num(l.packages),
+    num(l.quantity),
+    num(l.unitPrice),
+    money(ownNet(l, ownDiscountPct)),
+  ];
+}
+
+/**
+ * Rows stay inside their group: each side is sorted within the group, and the
+ * groups are ordered by their first value in the sort's direction.
+ */
+function sortGroups(groups: MatchGroup[], ownDiscountPct: number, growers: boolean, sort: ColumnSort): MatchGroup[] {
+  if (sort.column == null) return groups;
+  const firstCell = (g: MatchGroup, column: number) =>
+    sortRows(lineCells(g, ownDiscountPct, growers), (cells, c) => cells[c], sort)[0]?.[column] ?? "";
+  return sortRows(groups, firstCell, sort).map((g) => ({
+    ...g,
+    supplierLines: sortRows(g.supplierLines, (l, c) => supplierCells(g, l, growers)[c], sort),
+    ownLines: sortRows(g.ownLines, (l, c) => ownCells(g, l, ownDiscountPct, growers)[c], sort),
+  }));
 }
 
 function GroupStatus({ g }: { g: MatchGroup }) {
@@ -115,6 +135,7 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", g
   /** Columns from the side tag up to the numbers: side, line, [grower,] date, reference, item. */
   const labelSpan = growers ? 6 : 5;
   const filters = useColumnFilters(headers.length);
+  const sort = useColumnSort();
   /** Groups the user opened or closed, relative to their default. */
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const isOpen = (g: MatchGroup) => openByDefault(g) !== toggled.has(g.id);
@@ -127,9 +148,10 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", g
   const setAll = (open: boolean) =>
     setToggled(new Set(groups.filter((g) => openByDefault(g) !== open).map((g) => g.id)));
 
-  const visible = filters.active
+  const filtered = filters.active
     ? groups.filter((g) => lineCells(g, ownDiscountPct, growers).some((cells) => rowMatches(cells, filters.values)))
     : groups;
+  const visible = sortGroups(filtered, ownDiscountPct, growers, sort);
 
   /** The line rows on screen, in order, for the partial sums. */
   const selTable: SelTable = new Map<string, SelItem>(
@@ -148,11 +170,12 @@ export function MatchedGroupsTable({ groups, ownDiscountPct, tone = "default", g
         <button type="button" className="link-btn" onClick={() => setAll(false)}>
           סגירת הכל
         </button>
+        <ClearSort sort={sort} />
         <ClearFilters filters={filters} />
       </div>
       <div className="table-wrap">
         <table className="rec-table">
-          <FilterableHead headers={headers} filters={filters} />
+          <FilterableHead headers={headers} filters={filters} sort={sort} />
           {visible.map((g) => {
             const open = isOpen(g);
             const toggleButton = (

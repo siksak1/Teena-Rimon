@@ -18,7 +18,7 @@ export function useColumnFilters(columnCount: number): ColumnFilters {
 }
 
 /** Intl output carries bidi marks and non-breaking spaces; compare on plain text. */
-function normalize(text: string): string {
+export function normalize(text: string): string {
   return text.replace(/[‎‏]/g, "").replace(/ /g, " ").trim().toLowerCase();
 }
 
