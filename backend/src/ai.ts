@@ -101,12 +101,12 @@ const SCHEMA = {
 
 /**
  * The extracted rows of the first and last pages (where the headers and the
- * totals are), as "x:text" cells, so the profile's labels match what the
- * parser sees. The PDF itself carries every page.
+ * totals are), plus any pages one call reads, as "x:text" cells, so the
+ * profile's labels match what the parser sees. The PDF itself carries every page.
  */
-export function rowsForPrompt(rows: RowsPayload): string {
+export function rowsForPrompt(rows: RowsPayload, extraPages: number[] = []): string {
   const pages = [...new Set(rows.map((r) => r.page))];
-  const keep = new Set([pages[0], pages.at(-1)]);
+  const keep = new Set([pages[0], pages.at(-1), ...extraPages]);
   return rows
     .filter((r) => keep.has(r.page))
     .map((r) => `p${r.page} y${Math.round(r.y)} | ${r.cells.map((c) => `${Math.round(c.xMin)}:${c.text}`).join(" | ")}`)
@@ -114,17 +114,68 @@ export function rowsForPrompt(rows: RowsPayload): string {
 }
 
 export type AiOptions = { effort?: "low" | "medium" | "high" };
+export type AiInput = { pdfBase64: string; rows: RowsPayload; scanned: boolean; vatHint: string | null };
 
-/** Read one supplier invoice with Claude. Throws `AiUnreadable`, or the SDK's errors (network, rate limits). */
-export async function readInvoice(
+/**
+ * Most parallel calls for one invoice. CloudFront waits 60 s for the whole
+ * request, and a call takes roughly as long as the rows it writes out, so a
+ * multi-page invoice is read one page per call, all at once; past this many
+ * pages, a call reads several.
+ */
+export const MAX_PARALLEL_CALLS = 10;
+
+/** The pages each call reads: one page per call, or consecutive runs of pages when there are more than `MAX_PARALLEL_CALLS`. */
+export function pageChunks(pageCount: number): number[][] {
+  const size = Math.ceil(pageCount / MAX_PARALLEL_CALLS);
+  const chunks: number[][] = [];
+  for (let first = 1; first <= pageCount; first += size) {
+    chunks.push(Array.from({ length: Math.min(size, pageCount - first + 1) }, (_, i) => first + i));
+  }
+  return chunks;
+}
+
+/**
+ * Read one supplier invoice with Claude. A multi-page invoice is read by
+ * parallel calls that each list the rows of their own pages (see
+ * `MAX_PARALLEL_CALLS`); the first call's header fields, total and profile
+ * are kept, since every call sees the whole PDF. Throws `AiUnreadable` if
+ * any call does, or the SDK's errors (network, rate limits).
+ */
+export async function readInvoice(client: Anthropic, input: AiInput, options: AiOptions = {}): Promise<AiResult> {
+  const pageCount = Math.max(1, ...input.rows.map((r) => r.page));
+  if (pageCount === 1) return readOnce(client, input, options, null);
+  const chunks = pageChunks(pageCount);
+  const results = await Promise.all(chunks.map((pages) => readOnce(client, input, options, { pages, of: pageCount })));
+  return {
+    reading: {
+      ...results[0].reading,
+      lines: results.flatMap((r, i) => r.reading.lines.filter((l) => chunks[i].includes(l.page))),
+    },
+    usage: {
+      inputTokens: results.reduce((n, r) => n + r.usage.inputTokens, 0),
+      outputTokens: results.reduce((n, r) => n + r.usage.outputTokens, 0),
+    },
+  };
+}
+
+function pagesText(pages: number[]): string {
+  return pages.length === 1 ? `page ${pages[0]}` : `pages ${pages[0]}–${pages.at(-1)}`;
+}
+
+async function readOnce(
   client: Anthropic,
-  input: { pdfBase64: string; rows: RowsPayload; scanned: boolean; vatHint: string | null },
-  options: AiOptions = {},
+  input: AiInput,
+  options: AiOptions,
+  part: { pages: number[]; of: number } | null,
 ): Promise<AiResult> {
   const hint = input.vatHint ? `\nThe wholesaler's records name the supplier's VAT number as ${input.vatHint}.` : "";
   const source = input.scanned
     ? "The PDF is a scan; the rows below were read from it by OCR in the browser and may contain misreadings — read the numbers from the image."
     : "The rows below are the PDF's own text layer, as the program extracted it.";
+  const scope = part
+    ? `\n\nThe invoice has ${part.of} pages, and other calls read the rest. In lines, list only the item rows printed on ${pagesText(part.pages)}, with their page numbers counted from the first page of the PDF; return an empty list if there are none. Fill every other field from the whole invoice, as usual.`
+    : "";
+  const shown = part ? "first and last page, and the pages you read" : "first and last page";
   const stream = client.beta.messages.stream({
     model: MODEL,
     max_tokens: 64000,
@@ -137,7 +188,7 @@ export async function readInvoice(
         role: "user",
         content: [
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: input.pdfBase64 } },
-          { type: "text", text: `${source}${hint}\n\nExtracted rows (first and last page):\n${rowsForPrompt(input.rows)}` },
+          { type: "text", text: `${source}${hint}${scope}\n\nExtracted rows (${shown}):\n${rowsForPrompt(input.rows, part?.pages)}` },
         ],
       },
     ],

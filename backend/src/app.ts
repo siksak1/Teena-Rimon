@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { verifyAiReading } from "../../core/src/ai/verify.js";
 import { documentFromRows, type RowsPayload } from "../../core/src/remote.js";
-import { AiUnreadable, costOf, type AiResult } from "./ai.js";
+import { AiUnreadable, costOf, type AiInput, type AiResult } from "./ai.js";
 import { afterAiCall, newFormatLearned, type AlertConfig, type AlertSink } from "./alerts.js";
 import { month, type Store } from "./store.js";
 
@@ -18,7 +18,7 @@ export type Deps = {
   /** The customer slug a secret URL token belongs to, or null. */
   customerOf(token: string): Promise<string | null>;
   store: Store;
-  readInvoice(input: { pdfBase64: string; rows: RowsPayload; scanned: boolean; vatHint: string | null }): Promise<AiResult>;
+  readInvoice(input: AiInput): Promise<AiResult>;
   alerts: { sink: AlertSink; config: AlertConfig };
   /** AI calls one customer may make per day. */
   dailyLimit: number;
