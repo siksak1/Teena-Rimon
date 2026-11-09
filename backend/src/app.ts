@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { verifyAiReading } from "../../core/src/ai/verify.js";
-import { documentFromRows, type RowsPayload } from "../../core/src/remote.js";
+import { documentFromRows, ROWS_LIMITS, type RowsPayload } from "../../core/src/remote.js";
 import { AiUnreadable, costOf, type AiInput, type AiResult } from "./ai.js";
 import { afterAiCall, newFormatLearned, type AlertConfig, type AlertSink } from "./alerts.js";
 import { month, type Store } from "./store.js";
@@ -37,12 +37,14 @@ const parseBody = z.strictObject({
   rows: z
     .array(
       z.strictObject({
-        page: z.number().int().min(1).max(500),
+        page: z.number().int().min(1).max(ROWS_LIMITS.page),
         y: z.number(),
-        cells: z.array(z.strictObject({ text: z.string().max(500), xMin: z.number(), xMax: z.number() })).max(80),
+        cells: z
+          .array(z.strictObject({ text: z.string().max(ROWS_LIMITS.cellText), xMin: z.number(), xMax: z.number() }))
+          .max(ROWS_LIMITS.cellsPerRow),
       }),
     )
-    .max(20_000),
+    .max(ROWS_LIMITS.rows),
   vatHint: z.string().regex(/^\d{8,9}$/).nullable(),
 });
 

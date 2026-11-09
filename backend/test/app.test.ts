@@ -70,6 +70,17 @@ describe("POST /parse", () => {
     expect(sink.sent.map((s) => s.subject)).toEqual(["LedgerMatch: new supplier format — חקלאי גרנות"]);
   });
 
+  it("accepts a scan whose OCR read a whole column as one huge cell (the browser clips it)", async () => {
+    const doc = await loadPdf(await readSample(PAIRS.granot.supplier));
+    const row = doc.rows[0];
+    const huge = { ...row.cells[0], text: "12/1035072612/1035072623593".repeat(40) };
+    doc.rows[0] = { ...row, cells: [...row.cells, huge] };
+    rows = rowsPayload(doc);
+    expect(Math.max(...rows.flatMap((r) => r.cells.map((c) => c.text.length)))).toBe(500);
+    const { deps } = setup();
+    expect((await handle(parseRequest(), deps)).status).toBe(200);
+  });
+
   it("learns the layout again (version 2) without calling it a new format", async () => {
     const { deps, store } = setup();
     await handle(parseRequest(), deps);

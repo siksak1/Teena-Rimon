@@ -40,12 +40,27 @@ export interface RemoteSupport {
   onAiStart?(): void;
 }
 
+/** What the backend accepts in `rows` (it refuses the whole request past these). */
+export const ROWS_LIMITS = { rows: 20_000, cellsPerRow: 80, cellText: 500, page: 500 } as const;
+
+/**
+ * The rows within `ROWS_LIMITS`. OCR of a scan sometimes reads a whole column
+ * as one cell of hundreds of digits: no label or amount is that long, so
+ * clipping it loses nothing the backend checks, and the AI reads the PDF itself.
+ */
 export function rowsPayload(doc: PdfDocument): RowsPayload {
-  return doc.rows.map((r) => ({
-    page: r.page,
-    y: Math.round(r.y * 10) / 10,
-    cells: r.cells.map((c) => ({ text: c.text, xMin: Math.round(c.xMin * 10) / 10, xMax: Math.round(c.xMax * 10) / 10 })),
-  }));
+  return doc.rows
+    .filter((r) => r.page <= ROWS_LIMITS.page)
+    .slice(0, ROWS_LIMITS.rows)
+    .map((r) => ({
+      page: r.page,
+      y: Math.round(r.y * 10) / 10,
+      cells: r.cells.slice(0, ROWS_LIMITS.cellsPerRow).map((c) => ({
+        text: c.text.slice(0, ROWS_LIMITS.cellText),
+        xMin: Math.round(c.xMin * 10) / 10,
+        xMax: Math.round(c.xMax * 10) / 10,
+      })),
+    }));
 }
 
 /** Rebuild a document from rows sent by the browser (the backend reads the AI's profile with it). */
