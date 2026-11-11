@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import type { AiReading } from "../../core/src/ai/verify.js";
 import type { RowsPayload } from "../../core/src/remote.js";
@@ -48,12 +49,15 @@ const rowsOn = (pageCount: number): RowsPayload =>
 /** A client whose answer depends on which pages the prompt asks for; records every prompt. */
 function fakeClient(answer: (prompt: string) => AiReading | "refusal") {
   const prompts: string[] = [];
+  /** The PDF (base64) each call was sent, in call order. */
+  const documents: string[] = [];
   const client = {
     beta: {
       messages: {
-        stream(params: { messages: { content: { type: string; text?: string }[] }[] }) {
+        stream(params: { messages: { content: { type: string; text?: string; source?: { data: string } }[] }[] }) {
           const prompt = params.messages[0].content.find((c) => c.type === "text")!.text!;
           prompts.push(prompt);
+          documents.push(params.messages[0].content.find((c) => c.type === "document")!.source!.data);
           const out = answer(prompt);
           return {
             finalMessage: async () => ({
@@ -66,7 +70,7 @@ function fakeClient(answer: (prompt: string) => AiReading | "refusal") {
       },
     },
   };
-  return { client: client as unknown as Anthropic, prompts };
+  return { client: client as unknown as Anthropic, prompts, documents };
 }
 const input = (pageCount: number) => ({ pdfBase64: "x", rows: rowsOn(pageCount), scanned: true, vatHint: null });
 const askedPage = (prompt: string) => Number(/printed on page (\d+)/.exec(prompt)?.[1]);
@@ -159,14 +163,39 @@ describe("reading an invoice with the AI", () => {
   });
 
   it("names the pages a re-read call covers when they are not consecutive", async () => {
-    // 22 pages, read three per call; only odd pages come back with rows, so 11 even pages are read again, two per call.
+    // 40 pages, read three per call; only odd pages come back with rows, so 20 even pages are read again, two per call.
     const { client, prompts } = fakeClient((prompt) => reading(askedPages(prompt).filter((p) => p % 2 === 1).map((p) => line(p, 100))));
-    const { reading: out } = await readInvoice(client, input(22));
-    const retries = prompts.slice(pageChunks(22).length);
-    expect(retries).toHaveLength(6);
+    const { reading: out } = await readInvoice(client, input(40));
+    const retries = prompts.slice(pageChunks(40).length);
+    const even = Array.from({ length: 20 }, (_, i) => 2 * (i + 1));
+    expect(retries).toHaveLength(pageChunks(20).length);
     expect(retries[0]).toContain("printed on pages 2, 4,");
-    expect(retries.flatMap(askedPages)).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]);
-    expect(out.lines.map((l) => l.page)).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21]);
+    expect(retries.flatMap(askedPages)).toEqual(even);
+    expect(out.lines.map((l) => l.page)).toEqual(even.map((p) => p - 1));
+  });
+
+  it("sends each call only its own pages, with the first and last page for the headers and totals", async () => {
+    const pdf = await PDFDocument.create();
+    for (let i = 1; i <= 10; i++) pdf.addPage([200 + i, 300]); // each page's width tells it apart
+    const pdfBase64 = Buffer.from(await pdf.save()).toString("base64");
+    const { client, prompts, documents } = fakeClient((prompt) => reading([line(askedPage(prompt), 60)]));
+    await readInvoice(client, { ...input(10), pdfBase64 });
+
+    const widths = await Promise.all(
+      documents.map(async (d) => (await PDFDocument.load(Buffer.from(d, "base64"))).getPages().map((p) => p.getWidth() - 200)),
+    );
+    const byPage = new Map(prompts.map((p, i) => [askedPage(p), { prompt: p, pages: widths[i] }]));
+    expect(byPage.get(4)!.pages).toEqual([1, 4, 10]);
+    expect(byPage.get(4)!.prompt).toContain("holds only pages 1, 4, 10 of the invoice");
+    expect(byPage.get(1)!.pages).toEqual([1, 10]);
+    expect(byPage.get(10)!.pages).toEqual([1, 10]);
+  });
+
+  it("sends the whole file when it cannot split the PDF", async () => {
+    const { client, prompts, documents } = fakeClient((prompt) => reading([line(askedPage(prompt), 200)]));
+    await readInvoice(client, input(3)); // "x" is not a PDF
+    expect(documents).toEqual(["x", "x", "x"]);
+    expect(prompts[0]).not.toContain("holds only pages");
   });
 
   it("groups pages so no invoice makes more than the maximum number of calls", () => {

@@ -18,6 +18,7 @@ export type ExtractionErrorCode =
   | "AI_TIMEOUT"
   | "AI_REJECTED"
   | "AI_RATE_LIMITED"
+  | "AI_BUSY"
   | "AI_UNREADABLE";
 
 /** Raised when a PDF or Excel file cannot be parsed; `message` is shown to the user (Hebrew). */

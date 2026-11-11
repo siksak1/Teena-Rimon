@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { PDFDocument } from "pdf-lib";
 import { aiReadingSchema, type AiReading } from "../../core/src/ai/verify.js";
 import type { RowsPayload } from "../../core/src/remote.js";
 
@@ -102,7 +103,7 @@ const SCHEMA = {
 /**
  * The extracted rows of the first and last pages (where the headers and the
  * totals are), plus any pages one call reads, as "x:text" cells, so the
- * profile's labels match what the parser sees. The PDF itself carries every page.
+ * profile's labels match what the parser sees.
  */
 export function rowsForPrompt(rows: RowsPayload, extraPages: number[] = []): string {
   const pages = [...new Set(rows.map((r) => r.page))];
@@ -122,7 +123,7 @@ export type AiInput = { pdfBase64: string; rows: RowsPayload; scanned: boolean; 
  * multi-page invoice is read one page per call, all at once; past this many
  * pages, a call reads several.
  */
-export const MAX_PARALLEL_CALLS = 10;
+export const MAX_PARALLEL_CALLS = 15;
 
 /** The pages each call reads: one page per call, or consecutive runs of pages when there are more than `MAX_PARALLEL_CALLS`. */
 export function pageChunks(pageCount: number): number[][] {
@@ -152,11 +153,13 @@ const TOTAL_SLACK = 1;
  */
 export async function readInvoice(client: Anthropic, input: AiInput, options: AiOptions = {}): Promise<AiResult> {
   const pageCount = Math.max(1, ...input.rows.map((r) => r.page));
-  if (pageCount === 1) return readOnce(client, input, options, null);
+  if (pageCount === 1) return readOnce(client, input, options, null, { base64: input.pdfBase64, pages: null });
+  const source = await loadPdf(input.pdfBase64);
   const readPages = (chunks: number[][]) =>
     Promise.all(
       chunks.map(async (pages) => {
-        const result = await readOnce(client, input, options, { pages, of: pageCount });
+        const pdf = await pdfFor(source, input.pdfBase64, pages, pageCount);
+        const result = await readOnce(client, input, options, { pages, of: pageCount }, pdf);
         return { ...result, lines: result.reading.lines.filter((l) => pages.includes(l.page)) };
       }),
     );
@@ -182,6 +185,36 @@ export async function readInvoice(client: Anthropic, input: AiInput, options: Ai
   };
 }
 
+/** The PDF one call is sent: the whole file, or only some of its pages (by their number in the whole file). */
+type CallPdf = { base64: string; pages: number[] | null };
+
+/** The supplier's PDF, parsed once per invoice; null if pdf-lib cannot read it (then every call gets the whole file). */
+async function loadPdf(base64: string): Promise<PDFDocument | null> {
+  try {
+    return await PDFDocument.load(Buffer.from(base64, "base64"), { ignoreEncryption: true, updateMetadata: false });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The pages one call reads, plus the first and last page (the table headers,
+ * the invoice number and the totals), as a PDF of their own. Every call used
+ * to get the whole file: a 14-page scan sent about 270,000 input tokens in
+ * one burst, which ran into the API's per-minute token limit on a retry.
+ */
+async function pdfFor(source: PDFDocument | null, whole: string, pages: number[], pageCount: number): Promise<CallPdf> {
+  const keep = [...new Set([1, ...pages, pageCount])].sort((a, b) => a - b);
+  if (!source || keep.length >= pageCount || source.getPageCount() !== pageCount) return { base64: whole, pages: null };
+  try {
+    const part = await PDFDocument.create();
+    for (const page of await part.copyPages(source, keep.map((p) => p - 1))) part.addPage(page);
+    return { base64: Buffer.from(await part.save()).toString("base64"), pages: keep };
+  } catch {
+    return { base64: whole, pages: null };
+  }
+}
+
 /** The pages to read again, one per call while they fit in `MAX_PARALLEL_CALLS`. */
 function retryChunks(pages: number[]): number[][] {
   return pageChunks(pages.length).map((chunk) => chunk.map((i) => pages[i - 1]));
@@ -199,13 +232,18 @@ async function readOnce(
   input: AiInput,
   options: AiOptions,
   part: { pages: number[]; of: number } | null,
+  pdf: CallPdf,
 ): Promise<AiResult> {
   const hint = input.vatHint ? `\nThe wholesaler's records name the supplier's VAT number as ${input.vatHint}.` : "";
   const source = input.scanned
     ? "The PDF is a scan; the rows below were read from it by OCR in the browser and may contain misreadings — read the numbers from the image."
     : "The rows below are the PDF's own text layer, as the program extracted it.";
   const scope = part
-    ? `\n\nThe invoice has ${part.of} pages, and other calls read the rest. In lines, list only the item rows printed on ${pagesText(part.pages)}, with their page numbers counted from the first page of the PDF; return an empty list if there are none. Fill every other field from the whole invoice, as usual.`
+    ? `\n\nThe invoice has ${part.of} pages, and other calls read the rest.${
+        pdf.pages
+          ? ` To save time, the PDF attached holds only pages ${pdf.pages.join(", ")} of the invoice, in that order; give every row the page number it has in the whole invoice, not its position in this PDF.`
+          : ""
+      } In lines, list only the item rows printed on ${pagesText(part.pages)}, with their page numbers counted from the first page of the invoice; return an empty list if there are none. Fill every other field from the invoice as usual (the first and last pages carry the headers and totals).`
     : "";
   const shown = part ? "first and last page, and the pages you read" : "first and last page";
   const stream = client.beta.messages.stream({
@@ -219,7 +257,7 @@ async function readOnce(
       {
         role: "user",
         content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: input.pdfBase64 } },
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf.base64 } },
           { type: "text", text: `${source}${hint}${scope}\n\nExtracted rows (${shown}):\n${rowsForPrompt(input.rows, part?.pages)}` },
         ],
       },

@@ -17,6 +17,7 @@
     "@aws-sdk/client-ssm": "3.1153.0",
     "@aws-sdk/signature-v4a": "3.1138.0",
     "@smithy/signature-v4": "5.7.4",
+    "pdf-lib": "1.17.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {

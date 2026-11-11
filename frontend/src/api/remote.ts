@@ -89,6 +89,12 @@ async function failure(res: Response): Promise<ExtractionError> {
     .then((b: { error?: unknown }) => (typeof b?.error === "string" ? b.error : null))
     .catch(() => null);
   const status = `(קוד ${res.status}${error ? ` ${error}` : ""})`;
+  if (error === "AI_BUSY") {
+    return new ExtractionError(
+      `${CANNOT_READ}, ושירות הקריאה בעזרת AI עמוס כרגע ${status}. נסו שוב בעוד דקה`,
+      "AI_BUSY",
+    );
+  }
   if (res.status === 504) {
     return new ExtractionError(
       `${CANNOT_READ}, והקריאה בעזרת AI ארכה יותר מדקה ולכן הופסקה ${status}. נסו שוב, ואם זה חוזר פנו לתמיכה`,

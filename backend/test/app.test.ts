@@ -122,6 +122,25 @@ describe("POST /parse", () => {
     expect(await handle(parseRequest(), down.deps)).toEqual({ status: 502, body: { error: "AI_UNAVAILABLE" } });
   });
 
+  it("tells the API being busy (rate limit, overload) apart, and logs the error's type but not its message", async () => {
+    const rateLimited = Object.assign(new Error("429 rate limit: request quoted here"), {
+      status: 429,
+      error: { type: "error", error: { type: "rate_limit_error", message: "secret detail" } },
+    });
+    const busy = setup({ readInvoice: async () => Promise.reject(rateLimited) });
+    expect(await handle(parseRequest(), busy.deps)).toEqual({ status: 503, body: { error: "AI_BUSY" } });
+    const logged = busy.logs.at(-1)!;
+    expect(logged).toMatchObject({ outcome: "ai_busy", status: 429, errorType: "rate_limit_error" });
+    expect(JSON.stringify(logged)).not.toContain("secret detail");
+
+    const overloaded = setup({ readInvoice: async () => Promise.reject(Object.assign(new Error("overloaded"), { status: 529 })) });
+    expect(await handle(parseRequest(), overloaded.deps)).toEqual({ status: 503, body: { error: "AI_BUSY" } });
+
+    const down = setup({ readInvoice: async () => Promise.reject(new Error("ECONNRESET")) });
+    await handle(parseRequest(), down.deps);
+    expect(down.logs.at(-1)).toMatchObject({ outcome: "ai_error", status: 0, errorType: "Error" });
+  });
+
   it("rejects a malformed request", async () => {
     const { deps } = setup();
     expect((await handle({ ...parseRequest(), body: "{}" }, deps)).status).toBe(400);

@@ -92,9 +92,14 @@ async function parse(req: Request, slug: string, deps: Deps): Promise<Response> 
   try {
     result = await deps.readInvoice({ pdfBase64: input.pdf, rows: input.rows, scanned: input.scanned, vatHint: input.vatHint });
   } catch (err) {
-    const unreadable = err instanceof AiUnreadable;
-    deps.log({ route: "parse", customer: slug, outcome: unreadable ? "unreadable" : "ai_error", ms: Date.now() - started });
-    return unreadable ? { status: 422, body: { error: "AI_UNREADABLE" } } : { status: 502, body: { error: "AI_UNAVAILABLE" } };
+    if (err instanceof AiUnreadable) {
+      deps.log({ route: "parse", customer: slug, outcome: "unreadable", ms: Date.now() - started });
+      return { status: 422, body: { error: "AI_UNREADABLE" } };
+    }
+    const why = apiError(err);
+    const busy = why.status === 429 || why.status === 529;
+    deps.log({ route: "parse", customer: slug, outcome: busy ? "ai_busy" : "ai_error", ...why, ms: Date.now() - started });
+    return busy ? { status: 503, body: { error: "AI_BUSY" } } : { status: 502, body: { error: "AI_UNAVAILABLE" } };
   }
 
   const doc = documentFromRows(input.rows, input.scanned);
@@ -129,4 +134,17 @@ async function parse(req: Request, slug: string, deps: Deps): Promise<Response> 
     );
   }
   return { status: 200, body: { invoice, verified, learned: saved != null, newFormat } };
+}
+
+/**
+ * What the Anthropic API (or the network) said, for the log: the HTTP status
+ * and the error's type ("rate_limit_error", "overloaded_error", …) — never
+ * its message, which could quote the request.
+ */
+export function apiError(err: unknown): { status: number; errorType: string } {
+  const e = err as { status?: unknown; error?: { error?: { type?: unknown } }; name?: unknown };
+  const status = typeof e?.status === "number" ? e.status : 0;
+  const apiType = e?.error?.error?.type;
+  const errorType = typeof apiType === "string" ? apiType : typeof e?.name === "string" ? e.name : "unknown";
+  return { status, errorType: errorType.slice(0, 60) };
 }
