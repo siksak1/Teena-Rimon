@@ -4,7 +4,7 @@ import type { ExtractionResult, OwnInvoice, SupplierInvoice } from "./model.js";
 import { missingDiscountWarning } from "./parsers/agrolineDraft.js";
 import { DIGITS } from "./ocr/table.js";
 import type { GrayImage, ScanSupport } from "./ocr/types.js";
-import { loadPdf, type PdfDocument } from "./pdf/layout.js";
+import { loadPdf, withoutCopyPages, type PdfDocument } from "./pdf/layout.js";
 import { ocrDocument } from "./pdf/ocrDocument.js";
 import { checkReading, unreadLines, type ReadingCheck } from "./parsers/coverage.js";
 import { parseWithProfile } from "./parsers/generic.js";
@@ -91,7 +91,9 @@ export async function extractInvoices(
 
   const own = ownParser.parse(ownDoc, config.displayName);
   // A copy of the wholesaler's own draft printed into the supplier's file is not part of the invoice.
-  const { doc: supplierDoc, skipped: draftPages } = withoutOwnDraftPages(supplierFile, ownParser);
+  const { doc: withoutDrafts, skipped: draftPages } = withoutOwnDraftPages(supplierFile, ownParser);
+  // The same invoice printed twice ("מקור" + "העתק"): read it once.
+  const { doc: supplierDoc, copies: copyPages } = withoutCopyPages(withoutDrafts);
   const generic = config.genericFallback !== false;
 
   let parser: SupplierParser | null = detectSupplier(supplierDoc, supplierParsers);
@@ -116,14 +118,22 @@ export async function extractInvoices(
     rejected.push({ reader, invoice, check });
     return null;
   };
+  /** Readers that failed with a bug rather than a refusal; the next step still runs. */
+  const crashed: string[] = [];
   const tryParse = (p: TextSupplierParser, doc: PdfDocument) => {
     try {
       const invoice = p.parse(doc);
       supplier = doc === supplierDoc ? gate(invoice, p.displayName) : invoice;
     } catch (err) {
-      // A generic parser refusing is expected: the next step may read the invoice.
-      if (!p.fallback || !(err instanceof ExtractionError)) throw err;
-      refusal = err;
+      if (err instanceof ExtractionError) {
+        // A generic parser refusing is expected: the next step may read the invoice.
+        if (!p.fallback) throw err;
+        refusal = err;
+        return;
+      }
+      // A bug in one reader (e.g. a layout it was not written for) must not stop the others.
+      console.error(`Supplier reader "${p.id}" failed`, err);
+      crashed.push(p.displayName);
     }
   };
 
@@ -145,8 +155,8 @@ export async function extractInvoices(
     tryParse(parser, supplierDoc);
   }
 
-  // The supplier's own parser missed rows: the generic parsers read the same text.
-  if (!supplier && rejected.length > 0 && generic) {
+  // The supplier's own parser missed rows or failed: the generic parsers read the same text.
+  if (!supplier && (rejected.length > 0 || crashed.length > 0) && generic) {
     const fallback = detectSupplier(supplierDoc, FALLBACK_PARSERS.filter((p) => p !== parser));
     if (fallback && !fallback.scanned) tryParse(fallback, supplierDoc);
   }
@@ -193,6 +203,12 @@ export async function extractInvoices(
       throw new ExtractionError(`חשבונית ${known.name} אינה נתמכת: ${known.reason}`, "UNSUPPORTED_SUPPLIER");
     }
     if (refusal) throw refusal;
+    if (crashed.length > 0) {
+      throw new ExtractionError(
+        `לא ניתן לקרוא את חשבונית הספק בקובץ "${input.supplierFileName}" באופן אוטומטי: הקורא "${crashed[0]}" נכשל בקריאת המבנה שלה`,
+        "PARSER_FAILED",
+      );
+    }
     const supported = supplierParsers.filter((p) => !("fallback" in p && p.fallback)).map((p) => p.displayName).join(", ");
     throw new ExtractionError(
       generic
@@ -209,12 +225,18 @@ export async function extractInvoices(
   for (const r of rejected) {
     invoice.warnings.push(`הקורא "${r.reader}" לא שימש לחשבונית זו: ${r.check.reasons.join("; ")}`);
   }
+  for (const reader of crashed) {
+    invoice.warnings.push(`הקורא "${reader}" נכשל בקריאת חשבונית זו, והיא נקראה בדרך אחרת`);
+  }
   if (invoice.lines.length === 0) {
     throw new ExtractionError(`לא נמצאו שורות פריטים בחשבונית ${parser?.displayName ?? "הספק"}`, "NO_LINES");
   }
   if (invoice.generic) nameFromOwnDocument(invoice, own, textDoc);
   if (draftPages.length > 0) {
     invoice.warnings.push(draftPagesWarning(draftPages, input.supplierFileName, config.displayName));
+  }
+  for (const { page, of } of copyPages) {
+    invoice.warnings.push(`עמוד ${page} בקובץ "${input.supplierFileName}" הוא העתק של עמוד ${of} — הוא לא נקרא פעם נוספת`);
   }
   if (ownDoc.repairedByOcr) own.warnings.push(ocrRepairWarning(input.ownFileName));
   if (supplierDoc.repairedByOcr) invoice.warnings.push(ocrRepairWarning(input.supplierFileName));

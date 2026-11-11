@@ -26,13 +26,13 @@ type Key =
 
 const COLUMNS: ColumnSpec<Key>[] = [
   { key: "date", header: /^תאריך$/ },
-  { key: "doc", header: /^ת\.משלוח$/ },
-  { key: "pallet", header: /^משטח$/ },
-  { key: "bookRef", header: /^אסמכתא$/ },
+  { key: "doc", header: /^ת\.משלוח$/, optional: true },
+  { key: "pallet", header: /^משטח$/, optional: true },
+  { key: "bookRef", header: /^אסמכתא$/, optional: true },
   { key: "description", header: /^תוצרת\/זן\/איכות$/ },
-  { key: "size", header: /^גודל$/ },
-  { key: "packageType", header: /^אריזה$/ },
-  { key: "packages", header: /^כמות$/ },
+  { key: "size", header: /^גודל$/, optional: true },
+  { key: "packageType", header: /^אריזה$/, optional: true },
+  { key: "packages", header: /^כמות$/, optional: true },
   { key: "quantity", header: /^משקל\/יחידות$/ },
   { key: "unitPrice", header: /^מחיר$/ },
   { key: "total", header: /^סה"כ$/ },
@@ -103,13 +103,12 @@ function parseAgroline(doc: PdfDocument, { supplierId, supplierName, vatId }: Id
 
   const lines: SupplierLine[] = [];
   let grossSum = 0;
-  const optional = new Set<Key>(["doc", "pallet", "bookRef", "size", "packageType", "packages"]);
 
   pages: for (const rows of doc.pages) {
     let columns: Columns<Key> | null = null;
     for (const row of rows) {
       if (!columns) {
-        columns = columnsFromHeader(row, COLUMNS) ?? columnsFromHeader(row, COLUMNS.filter((c) => !optional.has(c.key)));
+        columns = columnsFromHeader(row, COLUMNS);
         continue;
       }
       if (row.text.includes("פדיון")) break pages;

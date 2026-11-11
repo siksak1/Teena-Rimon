@@ -624,6 +624,7 @@ function rowFields(row: Row, math: Arithmetic, columns: HeaderColumn[], invoiceD
   const variety: string[] = [];
   let packedCount: number | null = null;
   const hasDocColumn = columns.some((c) => c.field === "doc");
+  const hasDescriptionColumn = columns.some((c) => c.field === "description");
 
   for (const cell of row.cells) {
     if (used.has(cell)) continue;
@@ -634,6 +635,9 @@ function rowFields(row: Row, math: Arithmetic, columns: HeaderColumn[], invoiceD
       continue;
     }
     let column = nearestColumn(columns, cell);
+    // A column no dictionary entry names (e.g. "יעד", the destination) is not part of the item's
+    // name when the table has a description column of its own.
+    if (column && column.field == null && hasDescriptionColumn) continue;
     // Codes have no letters: a Hebrew cell near a code column is a right-aligned name.
     if (hasHebrew(text) && column && CODE_FIELDS.has(column.field!)) column = null;
     switch (column?.field) {

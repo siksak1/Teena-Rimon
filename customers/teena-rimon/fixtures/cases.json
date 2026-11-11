@@ -51,6 +51,10 @@
     "own": "sample_data/1 תאנה ורימון.pdf",
     "supplier": "sample_data/ספק 1.pdf"
   },
+  "kahalon": {
+    "own": "sample_data/הדפסת טיוטת חש' מגדל_4481 (79).pdf",
+    "supplier": "sample_data/fbad9848bfb28310cd78baf193efbde1.pdf"
+  },
   "excel": {
     "format": "excel",
     "own": "sample_data/excel/דוחות-תאנה ורימון-22.9.26 (1).xlsx",

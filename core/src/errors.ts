@@ -8,6 +8,7 @@ export type ExtractionErrorCode =
   | "OWN_DOC_NOT_RECOGNIZED"
   | "UNSUPPORTED_SUPPLIER"
   | "NO_LINES"
+  | "PARSER_FAILED"
   | "SCAN_UNREADABLE"
   | "TEXT_LAYER_BROKEN"
   | "NOT_EXCEL"

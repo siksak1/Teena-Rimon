@@ -166,52 +166,89 @@ function finishCell(c: { parts: string[]; xMin: number; xMax: number; alt?: stri
   return cell;
 }
 
-/** `label` is the header as printed, for fuzzy matching of OCR-read headers. */
-export type ColumnSpec<K extends string> = { key: K; header: RegExp; label?: string };
-export type Columns<K extends string> = Record<K, number>;
+/**
+ * `label` is the header as printed, for fuzzy matching of OCR-read headers.
+ * An `optional` column may be missing from the header: the table is still
+ * recognised, and its cells read as empty.
+ */
+export type ColumnSpec<K extends string> = { key: K; header: RegExp; label?: string; optional?: boolean };
+
+/** Every key the spec asked for, found or not: `readRow` gives each one a (possibly empty) list. */
+const SPEC_KEYS = Symbol("specKeys");
+/** Centres of header cells that matched no spec, e.g. a column this supplier added ("יעד"). */
+const IGNORED = Symbol("ignoredColumns");
 
 /**
- * Locate column centres from a header row. Returns null when any of the
- * requested headers is missing (i.e. this is not the header row).
+ * Column centres by key. An optional column missing from the header has no
+ * entry; read cells through `readRow` + `cellText`, which treat it as empty.
+ */
+export type Columns<K extends string> = Record<K, number> & {
+  readonly [SPEC_KEYS]?: readonly string[];
+  readonly [IGNORED]?: readonly number[];
+};
+
+/**
+ * Locate column centres from a header row. Returns null when any required
+ * header is missing (i.e. this is not the header row). Header cells that
+ * match no spec are remembered, so `readRow` drops the cells printed under
+ * them instead of pushing them into a neighbouring column.
  */
 export function columnsFromHeader<K extends string>(
   row: Row,
   specs: ColumnSpec<K>[],
   options: { fuzzy?: boolean } = {},
 ): Columns<K> | null {
-  const columns = {} as Columns<K>;
+  const columns = {} as Record<K, number>;
+  const used = new Set<Cell>();
   for (const spec of specs) {
     const cell =
       row.cells.find((c) => spec.header.test(c.text)) ??
-      (options.fuzzy && spec.label ? row.cells.find((c) => fuzzyEquals(c.text, spec.label!)) : undefined);
-    if (!cell) return null;
+      (options.fuzzy && spec.label
+        ? row.cells.find((c) => fuzzyEquals(c.text, spec.label!))
+        : undefined);
+    if (!cell) {
+      if (spec.optional) continue;
+      return null;
+    }
+    used.add(cell);
     columns[spec.key] = cell.x;
   }
-  return columns;
+  return Object.assign(columns, {
+    [SPEC_KEYS]: specs.map((s) => s.key),
+    [IGNORED]: row.cells.filter((c) => !used.has(c)).map((c) => c.x),
+  });
 }
 
 /**
  * Assign each cell of a data row to the nearest column. Several cells can
- * land in the same column; they are kept right-to-left.
+ * land in the same column; they are kept right-to-left. Every key of the
+ * spec gets a list (empty for a missing optional column), and cells nearest
+ * an unrecognised header column are dropped.
  */
 export function readRow<K extends string>(
   row: Row,
   columns: Columns<K>,
 ): Record<K, Cell[]> {
   const keys = Object.keys(columns) as K[];
-  const out = Object.fromEntries(keys.map((k) => [k, [] as Cell[]])) as Record<K, Cell[]>;
+  const all = [...new Set<string>([...(columns[SPEC_KEYS] ?? []), ...keys])];
+  const out = Object.fromEntries(all.map((k) => [k, [] as Cell[]])) as Record<K, Cell[]>;
+  if (keys.length === 0) return out;
+  const ignored = columns[IGNORED] ?? [];
   for (const cell of row.cells) {
     let best = keys[0];
     for (const key of keys) {
       if (Math.abs(columns[key] - cell.x) < Math.abs(columns[best] - cell.x)) best = key;
     }
+    const distance = Math.abs(columns[best] - cell.x);
+    if (ignored.some((x) => Math.abs(x - cell.x) < distance)) continue;
     out[best].push(cell);
   }
   return out;
 }
 
-export function cellText(cells: Cell[]): string {
-  return cells.map((c) => c.text).join(" ");
+/** Text of a column's cells; empty when the column is missing (`undefined`). */
+export function cellText(cells: Cell[] | undefined): string {
+  return cells?.map((c) => c.text).join(" ") ?? "";
 }
 
 /** Stacked header lines (e.g. "מחיר" over "ליחידה") are at most this far apart. */
@@ -249,6 +286,37 @@ export function columnsFromHeaderRows<K extends string>(
     }
   }
   return columnsFromHeader({ ...first, cells: merged, text: merged.map((c) => c.text).join("  ") }, specs);
+}
+
+/** The words that tell an original from its copy; the rest of a copied page is the same. */
+const COPY_LABEL = /\(?\s*(?:העתק נאמן למקור|העתק משוחזר|העתק|מקור)\s*\)?/g;
+
+/**
+ * Blank out pages that repeat an earlier page word for word, apart from the
+ * "מקור" / "העתק" label (an invoice printed as original + copy). Their rows
+ * would otherwise be read, or reported as missed, twice. Pages stay as empty
+ * pages, so page numbers still match the PDF.
+ */
+export function withoutCopyPages(doc: PdfDocument): { doc: PdfDocument; copies: { page: number; of: number }[] } {
+  const signature = (rows: Row[]) =>
+    rows
+      .map((r) => r.text.replace(COPY_LABEL, " ").replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .join("\n");
+  const seen = new Map<string, number>();
+  const copies: { page: number; of: number }[] = [];
+  doc.pages.forEach((rows, i) => {
+    const sig = signature(rows);
+    if (!sig) return;
+    const first = seen.get(sig);
+    if (first == null) seen.set(sig, i + 1);
+    else copies.push({ page: i + 1, of: first });
+  });
+  if (copies.length === 0) return { doc, copies };
+  const skip = new Set(copies.map((c) => c.page - 1));
+  const pages = doc.pages.map((rows, i) => (skip.has(i) ? [] : rows));
+  const rows = pages.flat();
+  return { doc: { ...doc, pages, rows, text: rows.map((r) => r.text).join("\n") }, copies };
 }
 
 /** A wrapped cell line sits this close above or below its data row. */

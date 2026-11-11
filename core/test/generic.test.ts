@@ -3,7 +3,7 @@ import { agrolineGenericParser } from "../src/parsers/agroline.js";
 import { genericTableParser, readAmount, readTable } from "../src/parsers/generic.js";
 import { SUPPLIER_PARSERS } from "../src/parsers/registry.js";
 import type { TextSupplierParser } from "../src/parsers/types.js";
-import { loadPdf } from "../src/pdf/layout.js";
+import { loadPdf, withoutCopyPages } from "../src/pdf/layout.js";
 import { round2 } from "../src/pdf/text.js";
 import { PAIRS, readSample } from "./helpers.js";
 
@@ -26,7 +26,8 @@ describe("generic table parser reproduces the dedicated parsers", () => {
     if (GENERIC_ONLY.has(name)) continue;
     const test = KNOWN_GAPS[name] ? it.skip : it;
     test(name, async () => {
-      const doc = await loadPdf(await readSample(pair.supplier));
+      // As extraction does: an invoice printed as original + copy is read once.
+      const { doc } = withoutCopyPages(await loadPdf(await readSample(pair.supplier)));
       // Meshek Dudu has no parser of its own: compare with the AGROLINE one.
       const dedicated = [...SUPPLIER_PARSERS, agrolineGenericParser].find((p): p is TextSupplierParser => !p.scanned && p.detect(doc))!;
       const expected = dedicated.parse(doc);
