@@ -134,32 +134,64 @@ export function pageChunks(pageCount: number): number[][] {
   return chunks;
 }
 
+/** A gap between the rows and the printed items total small enough to be rounding. */
+const TOTAL_SLACK = 1;
+
 /**
  * Read one supplier invoice with Claude. A multi-page invoice is read by
  * parallel calls that each list the rows of their own pages (see
  * `MAX_PARALLEL_CALLS`); the first call's header fields, total and profile
  * are kept, since every call sees the whole PDF. Throws `AiUnreadable` if
  * any call does, or the SDK's errors (network, rate limits).
+ *
+ * A call sometimes answers with no rows for a page that has them (an empty
+ * list, or rows numbered as another page's, which are dropped). When the rows
+ * then fall short of the printed items total, each page left without rows is
+ * read again, one page per call. This second round costs time only on an
+ * invoice that would otherwise come back with rows missing.
  */
 export async function readInvoice(client: Anthropic, input: AiInput, options: AiOptions = {}): Promise<AiResult> {
   const pageCount = Math.max(1, ...input.rows.map((r) => r.page));
   if (pageCount === 1) return readOnce(client, input, options, null);
-  const chunks = pageChunks(pageCount);
-  const results = await Promise.all(chunks.map((pages) => readOnce(client, input, options, { pages, of: pageCount })));
+  const readPages = (chunks: number[][]) =>
+    Promise.all(
+      chunks.map(async (pages) => {
+        const result = await readOnce(client, input, options, { pages, of: pageCount });
+        return { ...result, lines: result.reading.lines.filter((l) => pages.includes(l.page)) };
+      }),
+    );
+
+  const first = await readPages(pageChunks(pageCount));
+  const lines = first.flatMap((r) => r.lines);
+  const total = first[0].reading.printedItemsTotal;
+  const sum = lines.reduce((s, l) => s + l.lineTotal, 0);
+  const emptyPages = Array.from({ length: pageCount }, (_, i) => i + 1).filter((p) => !lines.some((l) => l.page === p));
+  const short = total == null || Math.abs(sum - total) > TOTAL_SLACK;
+  const second = short && emptyPages.length > 0 ? await readPages(retryChunks(emptyPages)) : [];
+
+  const all = [...first, ...second];
   return {
     reading: {
-      ...results[0].reading,
-      lines: results.flatMap((r, i) => r.reading.lines.filter((l) => chunks[i].includes(l.page))),
+      ...first[0].reading,
+      lines: [...lines, ...second.flatMap((r) => r.lines)].sort((a, b) => a.page - b.page),
     },
     usage: {
-      inputTokens: results.reduce((n, r) => n + r.usage.inputTokens, 0),
-      outputTokens: results.reduce((n, r) => n + r.usage.outputTokens, 0),
+      inputTokens: all.reduce((n, r) => n + r.usage.inputTokens, 0),
+      outputTokens: all.reduce((n, r) => n + r.usage.outputTokens, 0),
     },
   };
 }
 
+/** The pages to read again, one per call while they fit in `MAX_PARALLEL_CALLS`. */
+function retryChunks(pages: number[]): number[][] {
+  return pageChunks(pages.length).map((chunk) => chunk.map((i) => pages[i - 1]));
+}
+
 function pagesText(pages: number[]): string {
-  return pages.length === 1 ? `page ${pages[0]}` : `pages ${pages[0]}–${pages.at(-1)}`;
+  if (pages.length === 1) return `page ${pages[0]}`;
+  // A re-read of pages left without rows may skip pages in between.
+  const consecutive = pages.every((p, i) => i === 0 || p === pages[i - 1] + 1);
+  return consecutive ? `pages ${pages[0]}–${pages.at(-1)}` : `pages ${pages.join(", ")}`;
 }
 
 async function readOnce(

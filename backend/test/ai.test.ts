@@ -70,6 +70,13 @@ function fakeClient(answer: (prompt: string) => AiReading | "refusal") {
 }
 const input = (pageCount: number) => ({ pdfBase64: "x", rows: rowsOn(pageCount), scanned: true, vatHint: null });
 const askedPage = (prompt: string) => Number(/printed on page (\d+)/.exec(prompt)?.[1]);
+/** The pages a prompt asks for: "page 3", "pages 1–3" or "pages 2, 4". */
+function askedPages(prompt: string): number[] {
+  const [, list] = /printed on pages? ([\d–, ]+?),? with/.exec(prompt) ?? [];
+  const range = /^(\d+)–(\d+)$/.exec(list);
+  if (range) return Array.from({ length: Number(range[2]) - Number(range[1]) + 1 }, (_, i) => Number(range[1]) + i);
+  return list.split(", ").map(Number);
+}
 
 describe("reading an invoice with the AI", () => {
   it("reads a one-page invoice in a single call", async () => {
@@ -103,6 +110,63 @@ describe("reading an invoice with the AI", () => {
   it("refuses the whole invoice if any page's call does", async () => {
     const { client } = fakeClient((prompt) => (askedPage(prompt) === 2 ? "refusal" : reading([])));
     await expect(readInvoice(client, input(3))).rejects.toBeInstanceOf(AiUnreadable);
+  });
+
+  it("reads again a page whose call came back empty when the rows fall short of the printed total", async () => {
+    // Printed total 600 = 100 + 200 + 300; page 2's first call lists nothing.
+    let page2Calls = 0;
+    const { client, prompts } = fakeClient((prompt) => {
+      const page = askedPage(prompt);
+      if (page === 2 && ++page2Calls === 1) return reading([]);
+      return reading([line(page, page * 100)]);
+    });
+    const { reading: out, usage } = await readInvoice(client, input(3));
+    expect(prompts.map(askedPage)).toEqual([1, 2, 3, 2]);
+    expect(out.lines.map((l) => [l.page, l.lineTotal])).toEqual([
+      [1, 100],
+      [2, 200],
+      [3, 300],
+    ]);
+    expect(usage).toEqual({ inputTokens: 4000, outputTokens: 400 });
+  });
+
+  it("reads again a page whose rows came back numbered as another page's", async () => {
+    // The 14-page scan that lost pages 5–6: a call's rows were dropped and the invoice came back 24,731.55 short.
+    let page2Calls = 0;
+    const { client, prompts } = fakeClient((prompt) => {
+      const page = askedPage(prompt);
+      if (page === 2 && ++page2Calls === 1) return reading([line(3, 200)]);
+      return reading([line(page, page * 100)]);
+    });
+    const { reading: out } = await readInvoice(client, input(3));
+    expect(prompts).toHaveLength(4);
+    expect(out.lines.map((l) => [l.page, l.lineTotal])).toEqual([
+      [1, 100],
+      [2, 200],
+      [3, 300],
+    ]);
+  });
+
+  it("does not read again a page with no rows when the rest add up to the printed total", async () => {
+    // A last page holding only the footer: 100 + 500 = 600.
+    const { client, prompts } = fakeClient((prompt) => {
+      const page = askedPage(prompt);
+      return reading(page === 3 ? [] : [line(page, page === 1 ? 100 : 500)]);
+    });
+    const { reading: out } = await readInvoice(client, input(3));
+    expect(prompts).toHaveLength(3);
+    expect(out.lines.map((l) => l.lineTotal)).toEqual([100, 500]);
+  });
+
+  it("names the pages a re-read call covers when they are not consecutive", async () => {
+    // 22 pages, read three per call; only odd pages come back with rows, so 11 even pages are read again, two per call.
+    const { client, prompts } = fakeClient((prompt) => reading(askedPages(prompt).filter((p) => p % 2 === 1).map((p) => line(p, 100))));
+    const { reading: out } = await readInvoice(client, input(22));
+    const retries = prompts.slice(pageChunks(22).length);
+    expect(retries).toHaveLength(6);
+    expect(retries[0]).toContain("printed on pages 2, 4,");
+    expect(retries.flatMap(askedPages)).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]);
+    expect(out.lines.map((l) => l.page)).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21]);
   });
 
   it("groups pages so no invoice makes more than the maximum number of calls", () => {
